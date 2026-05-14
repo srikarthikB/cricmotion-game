@@ -408,6 +408,255 @@ docs/ -> documentation
 
 ---
 
+# Updated Project Structure
+
+```txt
+cricket-ai-game/
+│
+├── cv/
+│   ├── webcam.py
+│   ├── pose_tracking.py
+│   ├── gesture_detection.py
+│   └── bat_tracking.py
+│
+├── backend/
+│   ├── main.py
+│   ├── routes/
+│   ├── services/
+│   │   ├── game_logic.py
+│   │   ├── scoring.py
+│   │   ├── difficulty.py
+│   │   └── prediction_handler.py
+│   ├── models/
+│   └── utils/
+│
+├── frontend/
+│   ├── src/
+│   │   ├── components/
+│   │   ├── animations/
+│   │   ├── scoreboard/
+│   │   ├── stadium/
+│   │   └── effects/
+│   └── public/
+│
+├── assets/
+│   ├── sounds/
+│   ├── images/
+│   └── music/
+│
+├── docs/
+│   ├── api.md
+│   ├── setup.md
+│   └── team-roles.md
+│
+├── .gitignore
+├── README.md
+└── requirements.txt
+```
+
+---
+
+# Backend File Responsibilities
+
+## backend/main.py
+
+Main FastAPI entry point.
+
+Responsibilities:
+- start server
+- register routes
+- initialize application
+
+---
+
+## backend/routes/
+
+Contains API endpoints.
+
+Example future files:
+
+```txt
+game_routes.py
+score_routes.py
+prediction_routes.py
+```
+
+Responsibilities:
+- define API routes
+- receive frontend requests
+- return responses
+
+---
+
+## backend/services/
+
+Contains core game logic.
+
+### game_logic.py
+
+Handles:
+- innings flow
+- wickets
+- overs
+- match state
+
+### scoring.py
+
+Handles:
+- runs
+- boundaries
+- strike rate
+- score calculations
+
+### difficulty.py
+
+Handles:
+- easy/medium/hard adjustments
+- probability tuning
+
+### prediction_handler.py
+
+Handles:
+- communication with CV module
+- shot interpretation
+- prediction processing
+
+---
+
+## backend/models/
+
+Contains request/response models.
+
+Example:
+- Pydantic schemas
+- validation models
+
+---
+
+## backend/utils/
+
+Contains helper functions.
+
+Example:
+- math helpers
+- reusable utilities
+- constants
+
+---
+
+# CV Module Responsibilities
+
+## cv/webcam.py
+
+Handles:
+- webcam access
+- frame capture
+
+---
+
+## cv/pose_tracking.py
+
+Handles:
+- MediaPipe pose detection
+- body landmark extraction
+
+---
+
+## cv/gesture_detection.py
+
+Handles:
+- shot recognition logic
+- pose interpretation
+
+---
+
+## cv/bat_tracking.py
+
+Handles:
+- optional bat movement tracking
+- swing analysis
+
+---
+
+# Frontend Structure Responsibilities
+
+## frontend/src/components/
+
+Reusable UI components.
+
+Example:
+- buttons
+- cards
+- score widgets
+
+---
+
+## frontend/src/animations/
+
+Contains:
+- batting animations
+- transitions
+- visual effects
+
+---
+
+## frontend/src/scoreboard/
+
+Contains:
+- live score UI
+- wickets display
+- overs display
+
+---
+
+## frontend/src/stadium/
+
+Contains:
+- stadium visuals
+- audience effects
+- environment rendering
+
+---
+
+## frontend/src/effects/
+
+Contains:
+- hit effects
+- particle effects
+- celebration effects
+
+---
+
+# Communication Between Modules
+
+## CV → Backend
+
+CV module sends:
+- pose landmarks
+- shot predictions
+
+Backend processes:
+- timing
+- scoring
+- match logic
+
+---
+
+## Backend → Frontend
+
+Backend sends:
+- score updates
+- commentary
+- match state
+- prediction results
+
+Frontend displays:
+- gameplay visuals
+- scoreboards
+- animations
+
+---
+
 # Git Workflow
 
 ## Before Starting Work
@@ -415,6 +664,8 @@ docs/ -> documentation
 ```bash
 git pull origin main
 ```
+
+---
 
 ## Switch To Team Branch
 
@@ -431,6 +682,8 @@ cv-dev
 assets-dev
 ```
 
+---
+
 ## Save Work
 
 ```bash
@@ -438,6 +691,17 @@ git add .
 git commit -m "added feature"
 git push origin frontend-dev
 ```
+
+---
+
+# Pull Request Workflow
+
+1. Push branch changes
+2. Open GitHub repository
+3. Click "Compare & pull request"
+4. Create pull request
+5. Admin reviews code
+6. Merge into main branch
 
 ---
 
@@ -468,14 +732,29 @@ App.jsx
 
 ## Phase 1
 
-- frontend basic UI
-- backend setup
-- webcam detection
+### Frontend
+- basic UI
+- scoreboard
+- pages
+
+### Backend
+- FastAPI setup
+- `/health`
+- `/start-game`
+
+### CV
+- webcam setup
+- pose detection
+
+---
 
 ## Phase 2
 
 - shot prediction
 - score system
+- frontend/backend connection
+
+---
 
 ## Phase 3
 
@@ -483,3 +762,46 @@ App.jsx
 - animations
 - sounds
 - gameplay polish
+
+---
+
+# Setup Instructions
+
+## Frontend
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+---
+
+## Backend / CV
+
+```bash
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r backend/requirements.txt
+```
+
+---
+
+# Main Goal
+
+Current goal:
+
+```txt
+Build a working playable prototype first.
+```
+
+Not:
+- perfect AI
+- advanced multiplayer
+- production-level scalability
+
+Focus on:
+- smooth gameplay
+- clean integration
+- stable APIs
+- working shot detection
