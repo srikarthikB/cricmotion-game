@@ -1,6 +1,13 @@
-node_modules/
+# Virtual Environment
 venv/
-.venv/
+
+# Python cache
 __pycache__/
-.env
-dist/
+*.pyc
+
+# VS Code
+.vscode/
+
+# OS files
+.DS_Store
+Thumbs.db
