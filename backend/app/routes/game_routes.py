@@ -73,7 +73,7 @@ def predict_shot(request: PredictShotRequest) -> dict[str, str | float]:
 
 
 @router.post("/ball-result")
-def ball_result(request: BallResultRequest) -> dict[str, int | bool | str]:
+def ball_result(request: BallResultRequest) -> dict[str, int | float | bool | str]:
     game = get_game(request.game_id)
     ensure_running(game)
 
@@ -90,7 +90,20 @@ def ball_result(request: BallResultRequest) -> dict[str, int | bool | str]:
     if wicket:
         commentary = f"{commentary} Wicket!"
 
-    return {"runs": runs, "wicket": wicket, "commentary": commentary}
+    balls_left = max(game.total_balls - game.balls_played, 0)
+
+    return {
+        "runs": runs,
+        "wicket": wicket,
+        "commentary": commentary,
+        "score": game.score,
+        "wickets": game.wickets,
+        "balls_played": game.balls_played,
+        "overs": balls_to_overs(game.balls_played),
+        "balls_left": balls_left,
+        "target": game.target,
+        "status": game.status,
+    }
 
 
 @router.get("/score/{game_id}")

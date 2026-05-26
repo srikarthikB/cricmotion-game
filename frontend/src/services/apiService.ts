@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { MatchConfig } from '../types';
+import { BallResultResponse, MatchConfig, PoseLandmark, PredictShotResponse } from '../types';
 
 const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || 'http://127.0.0.1:8000';
 
@@ -70,6 +70,29 @@ export const apiService = {
 
   updateScore: async (matchId: string, scoreData: any) => {
     // await api.post(`/match/${matchId}/score`, scoreData);
+  },
+
+  predictShot: async (gameId: string, pose: PoseLandmark[]): Promise<PredictShotResponse> => {
+    const response = await api.post('/predict-shot', {
+      game_id: gameId,
+      pose,
+    });
+
+    return response.data;
+  },
+
+  submitBallResult: async (
+    gameId: string,
+    shot: string,
+    timing: string
+  ): Promise<BallResultResponse> => {
+    const response = await api.post('/ball-result', {
+      game_id: gameId,
+      shot,
+      timing,
+    });
+
+    return response.data;
   },
 
   getLeaderboard: async () => {

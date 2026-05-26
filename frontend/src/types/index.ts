@@ -23,6 +23,31 @@ export interface BackendMatch {
   overs: number;
 }
 
+export interface PoseLandmark {
+  x: number;
+  y: number;
+  z: number;
+}
+
+export interface PredictShotResponse {
+  shot: string;
+  confidence: number;
+  timing: string;
+}
+
+export interface BallResultResponse {
+  runs: number;
+  wicket: boolean;
+  commentary: string;
+  score: number;
+  wickets: number;
+  balls_played: number;
+  overs: number;
+  balls_left: number;
+  target: number;
+  status: 'running' | 'paused' | 'ended';
+}
+
 export interface ScoreData {
   runs: number;
   wickets: number;

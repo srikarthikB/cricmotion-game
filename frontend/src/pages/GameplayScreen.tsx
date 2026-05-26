@@ -1,13 +1,14 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useGameStore } from '../stores/useGameStore';
+import { apiService } from '../services/apiService';
+import { BallResultResponse, PredictShotResponse } from '../types';
 import { Pause, Target, Zap, Activity, Shield, Users, Camera, RefreshCw, Sparkles, Award } from 'lucide-react';
 
 export const GameplayScreen = () => {
   const setState = useGameStore((state) => state.setState);
   const score = useGameStore((state) => state.score);
   const updateScore = useGameStore((state) => state.updateScore);
-  const matchConfig = useGameStore((state) => state.matchConfig);
   const backendMatch = useGameStore((state) => state.backendMatch);
   const user = useGameStore((state) => state.user);
 
@@ -100,6 +101,86 @@ export const GameplayScreen = () => {
   const [motionTriggered, setMotionTriggered] = useState(false);
   const [poseCentroid, setPoseCentroid] = useState<{ x: number; y: number } | null>(null);
   const [poseJoints, setPoseJoints] = useState<{ x: number; y: number }[]>([]);
+  const isResolvingBallRef = useRef(false);
+
+  const buildPosePayload = () => {
+    if (poseJoints.length > 0) {
+      return poseJoints.map((joint) => ({
+        x: joint.x / 32,
+        y: joint.y / 24,
+        z: 0,
+      }));
+    }
+
+    return [
+      {
+        x: batPosition.x / 100,
+        y: batPosition.y / 100,
+        z: 0,
+      },
+    ];
+  };
+
+  const formatPredictionLabel = (value: string) => (
+    value
+      .replace(/_/g, ' ')
+      .trim()
+      .toUpperCase()
+  );
+
+  const getBackendShotPrediction = async (): Promise<PredictShotResponse | null> => {
+    if (!backendMatch) return null;
+
+    try {
+      return await apiService.predictShot(backendMatch.gameId, buildPosePayload());
+    } catch (err) {
+      console.error('Shot prediction failed:', err);
+      return null;
+    }
+  };
+
+  const getTemporaryBallInput = (prediction?: PredictShotResponse | null) => ({
+    shot: prediction?.shot || 'unknown',
+    timing: prediction?.timing || 'miss',
+  });
+
+  const applyBackendBallResult = (result: BallResultResponse) => {
+    updateScore({
+      runs: result.score,
+      wickets: result.wickets,
+      balls: result.balls_played,
+      overProgress: result.overs.toFixed(1),
+      currentOver: [...score.currentOver, result.wicket ? -1 : result.runs],
+      target: result.target,
+    });
+  };
+
+  const submitBackendBallResult = async (
+    prediction?: PredictShotResponse | null
+  ): Promise<BallResultResponse | null> => {
+    if (!backendMatch) return null;
+
+    const ballInput = getTemporaryBallInput(prediction);
+
+    try {
+      const result = await apiService.submitBallResult(
+        backendMatch.gameId,
+        ballInput.shot,
+        ballInput.timing
+      );
+      applyBackendBallResult(result);
+      return result;
+    } catch (err) {
+      console.error('Backend ball result failed:', err);
+      return null;
+    }
+  };
+
+  const finishIfBackendEnded = (result: BallResultResponse) => {
+    if (result.status === 'ended' || result.balls_left <= 0) {
+      setTimeout(() => setState('SUMMARY'), 2500);
+    }
+  };
 
   // Track Mouse / Touch movement on screen to calculate real-time bat tracking position
   const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -351,8 +432,8 @@ export const GameplayScreen = () => {
   };
 
   // Evaluate swing outcome
-  const swingBat = () => {
-    if (swingState !== 'IDLE') return;
+  const swingBat = async () => {
+    if (swingState !== 'IDLE' || isResolvingBallRef.current) return;
     
     setSwingState('SWINGING');
     playAudioEffect('SWOOSH');
@@ -361,112 +442,83 @@ export const GameplayScreen = () => {
     setTimeout(() => setSwingState('IDLE'), 500);
 
     if (ballState === 'RELEASED') {
+      isResolvingBallRef.current = true;
+      const prediction = await getBackendShotPrediction();
+      const predictedShot = prediction ? formatPredictionLabel(prediction.shot) : 'PREDICTION UNAVAILABLE';
+      const predictedTiming = prediction ? formatPredictionLabel(prediction.timing) : 'UNKNOWN';
       const timing = ballProgress;
-      let shotRuns = 0;
-      let shotTiming = 'POOR';
-      let shotType = 'DRIVE';
+      let shotTiming = predictedTiming;
+      let shotType = predictedShot;
 
       // Match the horizontal alignment of the bat with the ball (X tracking accuracy)
       const horizontalMatch = Math.abs(batPosition.x - 50) < 18;
 
       if (!horizontalMatch) {
-        // bat missed the ball's corridor
-        setLastShot({ runs: 0, timing: 'MISSED LINE', type: 'BEATEN FOR WIDTH' });
-        const nextBalls = score.balls + 1;
-        updateScore({
-          balls: nextBalls,
-          overProgress: `${Math.floor(nextBalls / 6)}.${nextBalls % 6}`,
-          currentOver: [...score.currentOver, 0]
-        });
+        const result = await submitBackendBallResult({ shot: 'unknown', confidence: 0, timing: 'miss' });
+        const runs = result?.runs || 0;
+        setLastShot({ runs, timing: 'MISS', type: 'BEATEN FOR WIDTH' });
         setBallState('DOT');
+        if (result) finishIfBackendEnded(result);
+        isResolvingBallRef.current = false;
         return;
       }
 
       if (timing >= 82 && timing <= 91) {
-        shotRuns = Math.random() > 0.4 ? 6 : 4;
-        shotTiming = 'PERFECT';
-        shotType = shotRuns === 6 ? 'PULL SHOT' : 'COVER DRIVE';
         playAudioEffect('HIT');
         playAudioEffect('CROWD_ROAR');
         setBallState('HIT');
       } else if ((timing >= 74 && timing < 82) || (timing > 91 && timing <= 96)) {
-        shotRuns = Math.random() > 0.5 ? 4 : Math.random() > 0.3 ? 2 : 1;
-        shotTiming = 'GOOD';
-        shotType = 'SQUARE CUT';
         playAudioEffect('HIT');
-        if (shotRuns === 4) playAudioEffect('CROWD_ROAR');
         setBallState('HIT');
       } else if (timing >= 64 && timing < 74) {
-        shotRuns = Math.random() > 0.6 ? 1 : 0;
-        shotTiming = 'TOO EARLY';
-        shotType = 'DEFENSIVE POKE';
-        if (shotRuns > 0) playAudioEffect('HIT');
         setBallState('HIT');
       } else if (timing > 96 && timing <= 101) {
-        shotRuns = Math.random() > 0.7 ? 1 : 0;
-        shotTiming = 'TOO LATE';
-        shotType = 'THICK-EDGE SLICE';
-        if (shotRuns > 0) playAudioEffect('HIT');
         setBallState('HIT');
       } else {
+        isResolvingBallRef.current = false;
         return;
       }
 
-      setLastShot({ runs: shotRuns, timing: shotTiming, type: shotType });
-      const nextBalls = score.balls + 1;
-      updateScore({
-        runs: score.runs + shotRuns,
-        balls: nextBalls,
-        overProgress: `${Math.floor(nextBalls / 6)}.${nextBalls % 6}`,
-        currentOver: [...score.currentOver, shotRuns]
-      });
-
-      if (!backendMatch) return;
-
-      const maxBalls = backendMatch.overs * 6;
-      if (nextBalls >= maxBalls) {
-        setTimeout(() => setState('SUMMARY'), 2500);
+      const result = await submitBackendBallResult(prediction);
+      if (!result) {
+        isResolvingBallRef.current = false;
+        return;
       }
+
+      if (result.runs > 0) playAudioEffect('HIT');
+      if (result.runs >= 4) playAudioEffect('CROWD_ROAR');
+      if (result.wicket) playAudioEffect('WICKET');
+
+      setLastShot({ runs: result.runs, timing: shotTiming, type: shotType });
+      setBallState(result.wicket ? 'BOWLED' : result.runs > 0 ? 'HIT' : 'DOT');
+      finishIfBackendEnded(result);
+      isResolvingBallRef.current = false;
     }
   };
 
   // Handle dot or bowled if ball goes untouched
-  const handleDotOrWicket = () => {
-    if (!backendMatch) return;
+  const handleDotOrWicket = async () => {
+    if (!backendMatch || isResolvingBallRef.current) return;
 
-    const bowlChance = selectedDelivery === 'FAST' ? 0.6 : selectedDelivery === 'MEDIUM' ? 0.45 : 0.3;
-    const isBowled = Math.random() < bowlChance;
+    isResolvingBallRef.current = true;
+    const result = await submitBackendBallResult({ shot: 'unknown', confidence: 0, timing: 'miss' });
 
-    const nextBalls = score.balls + 1;
-    
-    if (isBowled) {
+    if (!result) {
+      isResolvingBallRef.current = false;
+      return;
+    }
+
+    if (result.wicket) {
       playAudioEffect('WICKET');
       setBallState('BOWLED');
-      setLastShot({ runs: 0, timing: 'BOWLED STUMPS CHATTER', type: 'CLEAN BOWLED' });
-      
-      updateScore({
-        wickets: score.wickets + 1,
-        balls: nextBalls,
-        overProgress: `${Math.floor(nextBalls / 6)}.${nextBalls % 6}`,
-        currentOver: [...score.currentOver, -1]
-      });
+      setLastShot({ runs: result.runs, timing: 'MISS', type: 'CLEAN BOWLED' });
     } else {
       setBallState('DOT');
-      setLastShot({ runs: 0, timing: 'DOT BALL', type: 'DEFENDED / BEATEN' });
-      
-      updateScore({
-        balls: nextBalls,
-        overProgress: `${Math.floor(nextBalls / 6)}.${nextBalls % 6}`,
-        currentOver: [...score.currentOver, 0]
-      });
+      setLastShot({ runs: result.runs, timing: 'MISS', type: 'DEFENDED / BEATEN' });
     }
 
-    const maxBalls = backendMatch.overs * 6;
-    const isWicketLimit = score.wickets + (isBowled ? 1 : 0) >= (matchConfig?.wickets || 10);
-    
-    if (nextBalls >= maxBalls || isWicketLimit) {
-      setTimeout(() => setState('SUMMARY'), 2500);
-    }
+    finishIfBackendEnded(result);
+    isResolvingBallRef.current = false;
   };
 
   // Keyboard Spacebar integration
