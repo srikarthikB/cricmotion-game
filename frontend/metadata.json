@@ -1,0 +1,6 @@
+{
+  "name": "CricMotion AI",
+  "description": "A high-performance, futuristic AI-powered cricket motion game using real-time pose detection and immersive esports HUD animations.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["ai_motion_tracking", "esports_dashboard"]
+}
