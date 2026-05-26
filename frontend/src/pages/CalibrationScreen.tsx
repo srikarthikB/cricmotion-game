@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useGameStore } from '../stores/useGameStore';
 import { apiService } from '../services/apiService';
-import { Camera, CheckCircle2, AlertCircle, RefreshCw } from 'lucide-react';
+import { CheckCircle2, RefreshCw, ChevronLeft, Play } from 'lucide-react';
 
 export const CalibrationScreen = () => {
   const setState = useGameStore((state) => state.setState);
@@ -90,12 +90,13 @@ export const CalibrationScreen = () => {
       {/* Main Content Area */}
       <div className="relative z-10 flex-1 flex flex-col p-6 overflow-y-auto scrollbar-none">
         <header className="flex items-center justify-between mb-8">
-            <button onClick={() => setState('DASHBOARD')} className="p-3 bg-white/5 rounded-2xl border border-white/10 hover:bg-white/10 transition-colors">
-                <RefreshCw size={20} className="text-white opacity-50 rotate-180" />
+            <button onClick={() => setState('MATCH_SETTINGS')} className="btn-icon" aria-label="Back to match setup">
+                <ChevronLeft size={22} />
             </button>
             <div className="text-center">
-                <p className="text-[9px] font-black tracking-[0.4em] text-cyan-400 opacity-50 uppercase mb-1 leading-none italic">SENSORS ACTIVE</p>
-                <h1 className="text-2xl font-black italic tracking-tighter uppercase text-white leading-none">BIOMETRICS</h1>
+                <p className="eyebrow mb-2">Step 2 of 2</p>
+                <h1 className="screen-title text-2xl sm:text-3xl">Camera Setup</h1>
+                <p className="helper-text mt-2">Stand in frame, then start calibration to begin the match.</p>
             </div>
             <div className="w-12" />
         </header>
@@ -107,15 +108,15 @@ export const CalibrationScreen = () => {
                className="mb-8 text-center"
             >
                 <h1 className="text-6xl font-black italic text-white mb-2 leading-[0.8] tracking-tighter drop-shadow-[0_0_20px_rgba(0,0,0,1)] uppercase">
-                BIOMETRIC<br/>
-                <span className="text-cyan-400">CALIBRATION</span>
+                Ready Your<br/>
+                <span className="text-cyan-400">Batting Stance</span>
                 </h1>
                 <div className="flex items-center justify-center space-x-2 font-black italic tracking-[0.3em] text-cyan-400/50 text-[10px] uppercase mt-4">
                     <motion.span
                         animate={{ opacity: [0.3, 1, 0.3] }}
                         transition={{ repeat: Infinity, duration: 2 }}
                     >
-                        {status === 'READY' ? 'SYSTEM READY BYPASS' : `MAPPING SKELETON... (${Math.floor(progress)}%)`}
+                        {status === 'READY' ? 'Camera ready. Start when you are centered.' : `Calibrating motion... (${Math.floor(progress)}%)`}
                     </motion.span>
                 </div>
             </motion.div>
@@ -183,9 +184,10 @@ export const CalibrationScreen = () => {
                                 whileHover={{ scale: 1.05 }}
                                 whileTap={{ scale: 0.95 }}
                                 onClick={startCalibration}
-                                className="gradient-btn py-4 px-12 text-lg shadow-[0_0_30px_rgba(0,242,255,0.2)]"
+                                className="btn-primary px-10 text-base shadow-[0_0_30px_rgba(0,242,255,0.2)]"
                             >
-                                INITIALIZE CALIBRATION
+                                <Play size={20} className="fill-black" />
+                                Start Calibration
                             </motion.button>
                         ) : status === 'SUCCESS' ? (
                             <motion.div initial={{ scale: 0.5, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="flex flex-col items-center">
@@ -204,16 +206,16 @@ export const CalibrationScreen = () => {
                             whileHover={{ scale: 1.05 }}
                             whileTap={{ scale: 0.95 }}
                             onClick={() => setState('DASHBOARD')}
-                            className="bg-white/5 border border-white/10 px-8 py-3 rounded-2xl text-[11px] font-black text-cyan-400 uppercase tracking-widest hover:bg-white/10 transition-all flex items-center space-x-2 shadow-lg"
+                            className="btn-secondary"
                         >
                             <RefreshCw size={14} className="rotate-180" />
-                            <span>RETURN TO LOBBY</span>
+                            <span>Return To Lobby</span>
                         </motion.button>
                         <button 
                             onClick={() => setState('MATCH_SETTINGS')}
-                            className="text-[10px] font-black text-white/40 uppercase tracking-widest hover:text-white transition-colors"
+                            className="text-[10px] font-black text-white/55 uppercase tracking-widest hover:text-white transition-colors"
                         >
-                            RECONFIGURE
+                            Change Match Setup
                         </button>
                     </div>
                 </div>

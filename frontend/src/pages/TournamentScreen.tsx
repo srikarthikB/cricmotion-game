@@ -5,14 +5,14 @@ import { ChevronLeft, Trophy, Crown, Lock, Star } from 'lucide-react';
 const BracketCard = ({ name, status, icon: Icon, color }: any) => (
   <motion.div
     whileHover={{ scale: status === 'LOCKED' ? 1 : 1.02 }}
-    className={`p-6 glass-card border-white/5 relative overflow-hidden flex items-center justify-between ${status === 'LOCKED' ? 'opacity-40 grayscale' : 'border-l-4 ' + color} transition-all`}
+    className={`p-6 glass-card border-white/10 relative overflow-hidden flex items-center justify-between ${status === 'LOCKED' ? 'opacity-40 grayscale cursor-not-allowed' : 'border-l-4 tap-target ' + color} transition-all`}
   >
     <div className="flex items-center space-x-6">
         <div className={`w-14 h-14 rounded-2xl flex items-center justify-center ${status === 'LOCKED' ? 'bg-white/5' : 'bg-cyan-400/10'}`}>
             {status === 'LOCKED' ? <Lock size={20} className="text-gray-500" /> : <Icon size={24} className={color.replace('border-l-', 'text-')} />}
         </div>
         <div>
-            <p className="text-[10px] text-gray-500 font-black tracking-[0.2em] uppercase mb-1 italic">{status}</p>
+            <p className="section-label mb-1">{status === 'ACTIVE' ? 'Ready to play' : status}</p>
             <h3 className="text-xl font-black italic tracking-tighter text-white uppercase">{name}</h3>
         </div>
     </div>
@@ -29,12 +29,16 @@ export const TournamentScreen = () => {
   const setState = useGameStore((state) => state.setState);
 
   return (
-    <div className="flex-1 flex flex-col px-6 py-10 overflow-y-auto font-sans pb-32">
-      <div className="flex items-center mb-10">
-        <button onClick={() => setState('DASHBOARD')} className="mr-6 p-3 glass-card hover:bg-cyan-500/20 text-white border-white/10">
+    <div className="screen-shell flex flex-col pb-32">
+      <div className="screen-header">
+        <button onClick={() => setState('DASHBOARD')} className="btn-icon" aria-label="Back to lobby">
           <ChevronLeft size={24} />
         </button>
-        <h1 className="text-4xl font-black italic tracking-tighter uppercase neon-text">WORLD TOUR</h1>
+        <div className="flex-1">
+          <p className="eyebrow mb-2">Tournament</p>
+          <h1 className="screen-title">World Tour</h1>
+          <p className="helper-text mt-2">Choose an unlocked bracket and track season progress.</p>
+        </div>
       </div>
 
       <div className="mb-10 relative h-56 rounded-3xl overflow-hidden glass-card flex items-center justify-center group border-white/10">
@@ -46,13 +50,13 @@ export const TournamentScreen = () => {
          <div className="absolute inset-0 bg-gradient-to-t from-black via-black/60 to-transparent" />
          <Trophy size={100} className="text-cyan-400 opacity-20 relative z-10" />
          <div className="absolute bottom-8 left-0 w-full text-center px-4 relative z-20">
-             <h2 className="text-3xl font-black italic tracking-tighter text-white mb-2 leading-none uppercase">GRAND FINALS</h2>
-             <p className="text-[10px] text-cyan-400 font-black tracking-[0.4em] uppercase italic opacity-60">SEASON 01: THE AWAKENING</p>
+             <h2 className="text-3xl font-black italic tracking-tighter text-white mb-2 leading-none uppercase">Grand Finals</h2>
+             <p className="text-[10px] text-cyan-400 font-black tracking-[0.4em] uppercase italic opacity-70">Season 01 / Active bracket below</p>
          </div>
       </div>
 
       <div className="space-y-4">
-          <h3 className="text-[10px] font-black tracking-[0.3em] text-cyan-400/80 mb-4 uppercase italic">CURRENT BRACKETS</h3>
+          <h3 className="section-label text-cyan-300 mb-4">Available Brackets</h3>
           <BracketCard 
             name="PREMIUM LEAGUE" 
             status="ACTIVE" 

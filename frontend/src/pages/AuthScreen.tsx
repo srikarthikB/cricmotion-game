@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { useGameStore } from '../stores/useGameStore';
 import { apiService } from '../services/apiService';
-import { User as UserIcon, Shield, Zap } from 'lucide-react';
+import { User as UserIcon, Shield, Play } from 'lucide-react';
 
 export const AuthScreen = () => {
   const setState = useGameStore((state) => state.setState);
@@ -40,18 +40,18 @@ export const AuthScreen = () => {
           <div className="inline-flex p-3 rounded-2xl bg-cyan-400/10 border border-cyan-400/20 mb-4">
              <UserIcon className="text-cyan-400 w-8 h-8" />
           </div>
-          <h2 className="text-3xl font-black text-white italic tracking-tighter uppercase leading-none mb-2">ACCESS TERMINAL</h2>
-          <p className="text-white/40 text-[10px] font-black tracking-[0.3em] uppercase italic">ESTABLISHING NEURAL LINK</p>
+          <h2 className="text-3xl font-black text-white italic tracking-tighter uppercase leading-none mb-2">Create Player</h2>
+          <p className="helper-text">Enter a player name to open the lobby and start a match.</p>
         </div>
 
         <form onSubmit={handleStart} className="space-y-6 relative z-10">
           <div className="space-y-2">
-            <label className="text-[10px] font-black text-cyan-400 uppercase tracking-widest italic ml-1">OPERATOR IDENTIFIER</label>
+            <label className="eyebrow ml-1">Player Name</label>
             <input 
               type="text" 
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="ENTER YOUR NAME..."
+              placeholder="Enter your name"
               className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 px-6 text-white font-bold placeholder:text-white/20 focus:outline-none focus:border-cyan-400/50 transition-colors uppercase italic"
               autoFocus
             />
@@ -62,10 +62,10 @@ export const AuthScreen = () => {
             whileTap={{ scale: 0.98 }}
             type="submit"
             disabled={!name.trim()}
-            className={`w-full flex items-center justify-center space-x-3 gradient-btn h-16 ${!name.trim() ? 'opacity-50 grayscale cursor-not-allowed' : ''}`}
+            className="btn-primary w-full h-16 text-base"
           >
-            <Zap className="w-5 h-5 fill-black" />
-            <span className="text-lg font-black italic tracking-tighter">INITIALIZE START</span>
+            <Play className="w-5 h-5 fill-black" />
+            <span>Enter Lobby</span>
           </motion.button>
 
           <div className="flex items-center space-x-4 opacity-30 group">
@@ -76,10 +76,10 @@ export const AuthScreen = () => {
 
           <button 
             type="button"
-            className="w-full py-4 px-6 rounded-2xl border border-white/5 text-white/40 hover:text-white hover:bg-white/5 transition-all flex items-center justify-center font-black text-xs uppercase italic tracking-widest"
+            className="btn-secondary w-full"
           >
-            <Shield className="mr-3 w-4 h-4 opacity-50" />
-            PRIVILEGED UPLINK
+            <Shield className="w-4 h-4" />
+            Guest Access
           </button>
         </form>
 

@@ -17,17 +17,21 @@ export const StatsScreen = () => {
   const setState = useGameStore((state) => state.setState);
 
   return (
-    <div className="flex-1 flex flex-col px-6 py-10 overflow-y-auto">
-      <div className="flex items-center mb-10">
-        <button onClick={() => setState('DASHBOARD')} className="mr-6 p-2 glass-card hover:bg-cyan-500/20 text-cyan-400">
+    <div className="screen-shell flex flex-col">
+      <div className="screen-header">
+        <button onClick={() => setState('DASHBOARD')} className="btn-icon" aria-label="Back to lobby">
           <ChevronLeft size={24} />
         </button>
-        <h1 className="text-3xl font-black italic tracking-tighter uppercase neon-text">PERFORMANCE HUB</h1>
+        <div className="flex-1">
+          <p className="eyebrow mb-2">Stats</p>
+          <h1 className="screen-title">Performance Hub</h1>
+          <p className="helper-text mt-2">Review scoring trends, top results, and play history.</p>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-4 mb-8">
         <div className="glass-card p-4 border-l-4 border-l-cyan-400">
-          <p className="text-[10px] text-gray-500 font-mono uppercase tracking-widest mb-1">Total Runs</p>
+          <p className="section-label mb-1">Total Runs</p>
           <p className="text-3xl font-black italic">1,420</p>
           <div className="flex items-center text-green-400 text-[10px] mt-2">
             <TrendingUp size={12} className="mr-1" />
@@ -35,7 +39,7 @@ export const StatsScreen = () => {
           </div>
         </div>
         <div className="glass-card p-4 border-l-4 border-l-magenta-500">
-          <p className="text-[10px] text-gray-500 font-mono uppercase tracking-widest mb-1">Top Score</p>
+          <p className="section-label mb-1">Top Score</p>
           <p className="text-3xl font-black italic">102*</p>
           <div className="flex items-center text-gray-500 text-[10px] mt-2">
              <Target size={12} className="mr-1" />
@@ -45,7 +49,7 @@ export const StatsScreen = () => {
       </div>
 
       <section className="glass-card p-6 mb-8 h-64">
-           <h3 className="text-xs font-mono tracking-[0.3em] text-cyan-400 mb-6 uppercase">RUN PROGRESSION</h3>
+           <h3 className="section-label text-cyan-300 mb-6">Run Progression</h3>
            <div className="w-full h-40">
                 <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={data}>
@@ -66,7 +70,7 @@ export const StatsScreen = () => {
       </section>
 
       <section className="space-y-4">
-          <h3 className="text-xs font-mono tracking-[0.3em] text-cyan-400 mb-4 uppercase">SYSTEM LOGS</h3>
+          <h3 className="section-label text-cyan-300 mb-4">Play Log</h3>
           <div className="glass-card p-4 flex items-center justify-between">
               <div className="flex items-center space-x-3">
                   <Clock className="text-gray-500" size={16} />

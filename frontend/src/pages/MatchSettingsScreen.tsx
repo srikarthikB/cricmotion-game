@@ -1,16 +1,16 @@
 import { motion } from 'motion/react';
 import { useGameStore } from '../stores/useGameStore';
-import { ChevronLeft, ChevronRight, Zap } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Play } from 'lucide-react';
 
 import { TEAMS, VENUES } from '../constants';
 
 const Selector = ({ label, value, onPrev, onNext }: any) => (
   <div className="flex items-center justify-between py-5 border-b border-white/5 last:border-0 px-4 group">
-    <span className="text-white/40 font-black uppercase tracking-[0.2em] text-[10px] group-hover:text-cyan-400/80 transition-colors italic">{label}</span>
+    <span className="section-label group-hover:text-cyan-300 transition-colors">{label}</span>
     <div className="flex items-center space-x-6">
-      <button onClick={onPrev} className="text-white/20 hover:text-cyan-400 transition-colors"><ChevronLeft size={24} /></button>
+      <button onClick={onPrev} className="btn-icon h-10 w-10" aria-label={`Decrease ${label}`}><ChevronLeft size={22} /></button>
       <span className="text-3xl font-black italic min-w-[100px] text-center text-white tracking-tighter uppercase">{value}</span>
-      <button onClick={onNext} className="text-white/20 hover:text-cyan-400 transition-colors"><ChevronRight size={24} /></button>
+      <button onClick={onNext} className="btn-icon h-10 w-10" aria-label={`Increase ${label}`}><ChevronRight size={22} /></button>
     </div>
   </div>
 );
@@ -24,15 +24,16 @@ export const MatchSettingsScreen = () => {
     <motion.div 
       initial={{ opacity: 0, x: 20 }}
       animate={{ opacity: 1, x: 0 }}
-      className="h-full flex flex-col p-6 space-y-8 overflow-y-auto scrollbar-none pb-48 font-sans"
+      className="screen-shell flex flex-col space-y-8 pb-48"
     >
-      <header className="flex items-center justify-between">
-        <button onClick={() => setState('DASHBOARD')} className="p-3 bg-white/5 rounded-2xl border border-white/10 hover:bg-white/10 transition-colors">
+      <header className="screen-header">
+        <button onClick={() => setState('DASHBOARD')} className="btn-icon" aria-label="Back to lobby">
             <ChevronLeft size={24} className="text-white" />
         </button>
         <div className="text-center">
-            <p className="text-[9px] font-black tracking-[0.4em] text-cyan-400 opacity-50 uppercase mb-1 leading-none italic">MATCH CONFIG</p>
-            <h1 className="text-3xl font-black italic tracking-tighter uppercase text-white leading-none">STRATEGY</h1>
+            <p className="eyebrow mb-2">Step 1 of 2</p>
+            <h1 className="screen-title">Match Setup</h1>
+            <p className="helper-text mt-2">Pick the rules, team, and stadium before calibration.</p>
         </div>
         <div className="w-12" />
       </header>
@@ -40,7 +41,7 @@ export const MatchSettingsScreen = () => {
       <div className="space-y-8">
         <section>
           <div className="flex items-center justify-between mb-4">
-             <h3 className="text-[10px] font-black tracking-[0.3em] text-white/50 uppercase italic">01. FORMAT PROTOCOL</h3>
+             <h3 className="section-label">01. Match Rules</h3>
              <div className="h-[1px] flex-1 bg-white/10 ml-4" />
           </div>
           <div className="glass-card overflow-hidden border-white/5">
@@ -57,9 +58,10 @@ export const MatchSettingsScreen = () => {
                 onNext={() => updateConfig({ wickets: Math.min(10, config.wickets + 1) })}
              />
              <div className="flex items-center justify-between py-6 px-4">
-                <span className="text-white/40 font-black uppercase tracking-[0.2em] text-[10px] italic">RUN CHASE MODE</span>
+                <span className="section-label">Run Chase Mode</span>
                 <button 
                     onClick={() => updateConfig({ isRunChase: !config.isRunChase })}
+                    aria-label="Toggle run chase mode"
                     className={`w-16 h-8 rounded-full relative transition-all duration-300 ${config.isRunChase ? 'bg-cyan-400' : 'bg-white/10 shadow-inner'}`}
                 >
                     <motion.div 
@@ -73,7 +75,7 @@ export const MatchSettingsScreen = () => {
 
         <section>
           <div className="flex items-center justify-between mb-6">
-             <h3 className="text-[10px] font-black tracking-[0.3em] text-white/50 uppercase italic">02. NATION SELECT</h3>
+             <h3 className="section-label">02. Choose Team</h3>
              <div className="h-[1px] flex-1 bg-white/10 ml-4" />
           </div>
           <div className="flex space-x-4 overflow-x-auto pb-4 px-2 scrollbar-none snap-x items-center">
@@ -81,6 +83,8 @@ export const MatchSettingsScreen = () => {
               <motion.div
                   key={team.id}
                   onClick={() => updateConfig({ team: team.id })}
+                  role="button"
+                  aria-label={`Select ${team.name}`}
                   className={`flex-shrink-0 w-28 aspect-[4/3] rounded-2xl overflow-hidden cursor-pointer border-2 transition-all duration-500 snap-center relative ${config.team === team.id ? 'border-cyan-400 scale-110 z-10 shadow-[0_0_30px_rgba(34,211,238,0.3)]' : 'border-white/10 opacity-70 hover:opacity-100'}`}
               >
                   <img 
@@ -100,7 +104,7 @@ export const MatchSettingsScreen = () => {
 
         <section>
            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-[10px] font-black tracking-[0.3em] text-white/50 uppercase italic">03. ARENA DEPLOYMENT</h3>
+              <h3 className="section-label">03. Choose Stadium</h3>
               <div className="h-[1px] flex-1 bg-white/10 ml-4" />
            </div>
            <div className="flex space-x-6 overflow-x-auto pb-6 px-2 scrollbar-none snap-x">
@@ -108,6 +112,8 @@ export const MatchSettingsScreen = () => {
                 <motion.div
                     key={venue.id}
                     onClick={() => updateConfig({ venue: venue.id })}
+                    role="button"
+                    aria-label={`Select ${venue.name}`}
                     className={`flex-shrink-0 w-64 aspect-video rounded-[1.5rem] overflow-hidden cursor-pointer border-2 transition-all duration-500 snap-center relative ${config.venue === venue.id ? 'border-cyan-400 scale-105 z-10 shadow-[0_0_40px_rgba(34,211,238,0.25)]' : 'border-white/10 opacity-70 hover:opacity-100'}`}
                 >
                     <img src={venue.img} alt={venue.name} className="w-full h-full object-cover brightness-75 group-hover:brightness-100" />
@@ -125,10 +131,10 @@ export const MatchSettingsScreen = () => {
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.98 }}
           onClick={() => setState('CALIBRATION')}
-          className="w-full gradient-btn flex items-center justify-center space-x-4 h-20 text-2xl shadow-[0_20px_50px_rgba(34,211,238,0.3)]"
+          className="btn-primary w-full h-20 text-xl sm:text-2xl shadow-[0_20px_50px_rgba(34,211,238,0.3)]"
         >
-          <Zap size={32} className="fill-black" />
-          <span className="tracking-tighter">INITIATE MATCH</span>
+          <Play size={30} className="fill-black" />
+          <span>Continue To Camera Setup</span>
         </motion.button>
       </div>
     </motion.div>

@@ -542,6 +542,55 @@ export const GameplayScreen = () => {
       ? 'text-emerald-400'
       : 'text-[#00f2ff]';
 
+  const cvSignalItems = [
+    {
+      label: 'Camera',
+      value: cameraStatus === 'ACTIVE' ? 'Connected' : cameraStatus === 'ERROR' ? 'Unavailable' : 'Connecting',
+      icon: Camera,
+      active: cameraStatus === 'ACTIVE',
+      warning: cameraStatus === 'ERROR',
+    },
+    {
+      label: 'Motion',
+      value: isMotionEnabled && cameraStatus === 'ACTIVE' ? 'Detection Active' : 'Standby',
+      icon: Activity,
+      active: isMotionEnabled && cameraStatus === 'ACTIVE',
+      warning: cameraStatus === 'ERROR',
+    },
+    {
+      label: 'Player',
+      value: poseCentroid ? 'Tracking Player' : cameraStatus === 'ACTIVE' ? 'Finding Stance' : 'No Signal',
+      icon: Target,
+      active: Boolean(poseCentroid),
+      warning: cameraStatus === 'ERROR',
+    },
+    {
+      label: 'Swing',
+      value: ballState === 'RELEASED' ? 'Waiting For Swing' : swingState === 'SWINGING' ? 'Swing Captured' : 'Queued',
+      icon: Zap,
+      active: ballState === 'RELEASED' || swingState === 'SWINGING',
+      warning: false,
+    },
+  ];
+
+  const cvFeedbackState = cameraStatus === 'ERROR'
+    ? 'Camera permission needed'
+    : swingState === 'SWINGING'
+      ? 'Swing gesture captured'
+      : ballState === 'RELEASED'
+        ? 'Waiting for swing'
+        : poseCentroid
+          ? 'Player tracking stable'
+          : cameraStatus === 'ACTIVE'
+            ? 'Tracking player stance'
+            : 'Preparing camera';
+
+  const cvReadiness = cameraStatus === 'ACTIVE'
+    ? Math.min(100, 45 + (poseCentroid ? 30 : 0) + Math.min(25, motionLevel))
+    : cameraStatus === 'ERROR'
+      ? 8
+      : 22;
+
   // Compute Ball position for visual rendering (parabolic physics)
   const ballVisuals = () => {
     if (ballState !== 'RELEASED') return { top: '44%', left: '50%', scale: 0.05, opacity: 0 };
@@ -1100,12 +1149,14 @@ export const GameplayScreen = () => {
       </div>
 
       <div className="absolute inset-x-0 bottom-4 px-4 z-20 pointer-events-none">
-        <div className="mx-auto max-w-4xl rounded-2xl border border-white/10 bg-neutral-950/80 backdrop-blur-md shadow-[0_16px_40px_rgba(0,0,0,0.45)] p-3 md:p-4">
-          <div className="grid grid-cols-[5.5rem_1fr] md:grid-cols-[6rem_1fr_13rem] gap-3 md:gap-4 items-center">
-            <div className="relative aspect-[4/3] overflow-hidden rounded-xl border border-white/10 bg-black">
+        <div className="mx-auto max-w-5xl rounded-2xl border border-cyan-200/15 bg-neutral-950/82 backdrop-blur-md shadow-[0_16px_42px_rgba(0,0,0,0.48)] p-3 md:p-4">
+          <div className="grid grid-cols-[5.5rem_1fr] lg:grid-cols-[6rem_1fr_13rem] gap-3 md:gap-4 items-center">
+            <div className="relative aspect-[4/3] overflow-hidden rounded-xl border border-cyan-200/15 bg-black">
               <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover scale-x-[-1] opacity-80" />
               <canvas ref={hiddenCanvasRef} className="hidden" width={32} height={24} />
-              <div className="absolute inset-0 border border-[#00f2ff]/20 rounded-xl" />
+              <div className="absolute inset-0 rounded-xl border border-cyan-200/20 shadow-[inset_0_0_22px_rgba(103,232,249,0.08)]" />
+              <div className="absolute inset-x-0 top-1/2 h-px bg-cyan-200/15" />
+              <div className="absolute inset-y-0 left-1/2 w-px bg-cyan-200/15" />
               <div className="absolute left-1.5 top-1.5 flex items-center gap-1 rounded-full bg-black/70 px-1.5 py-0.5">
                 <span className={`h-1.5 w-1.5 rounded-full ${cameraStatus === 'ACTIVE' ? 'bg-emerald-400' : cameraStatus === 'ERROR' ? 'bg-rose-500' : 'bg-amber-400'}`} />
                 <span className="text-[6px] font-black uppercase tracking-widest text-white">{cameraStatus}</span>
@@ -1115,9 +1166,12 @@ export const GameplayScreen = () => {
             <div className="min-w-0">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <p className="text-[8px] font-black uppercase tracking-[0.28em] text-white/35 italic">Webcam Input</p>
+                  <p className="text-[8px] font-black uppercase tracking-[0.28em] text-cyan-100/45 italic">Motion Control</p>
                   <p className={`text-xl md:text-3xl font-black uppercase italic tracking-tight ${motionStatusColor}`}>
                     {motionStatus}
+                  </p>
+                  <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-white/45">
+                    CV bridge: {cvFeedbackState}
                   </p>
                 </div>
                 <div className="hidden sm:block text-right">
@@ -1132,16 +1186,48 @@ export const GameplayScreen = () => {
                   transition={{ duration: 0.1 }}
                 />
               </div>
+              <div className="mt-3 grid grid-cols-2 gap-2 md:grid-cols-4">
+                {cvSignalItems.map((item) => (
+                  <div
+                    key={item.label}
+                    className={`rounded-xl border px-2.5 py-2 transition-colors ${
+                      item.warning
+                        ? 'border-rose-400/25 bg-rose-500/10 text-rose-200'
+                        : item.active
+                          ? 'border-cyan-200/25 bg-cyan-300/10 text-cyan-100'
+                          : 'border-white/10 bg-white/[0.035] text-white/50'
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <item.icon size={12} />
+                      <span className="text-[7px] font-black uppercase tracking-[0.2em]">{item.label}</span>
+                    </div>
+                    <p className="mt-1 truncate text-[9px] font-black uppercase tracking-wide">{item.value}</p>
+                  </div>
+                ))}
+              </div>
             </div>
 
-            <div className="col-span-2 md:col-span-1 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2">
-              <p className="text-[8px] font-black uppercase tracking-[0.25em] text-white/35 italic">Current Shot</p>
+            <div className="col-span-2 lg:col-span-1 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <p className="text-[8px] font-black uppercase tracking-[0.25em] text-white/35 italic">CV Feedback</p>
+                <span className="rounded-full border border-cyan-200/15 bg-cyan-300/10 px-2 py-0.5 text-[7px] font-black uppercase tracking-widest text-cyan-100/80">
+                  Ready {Math.round(cvReadiness)}%
+                </span>
+              </div>
               <p className="truncate text-sm md:text-base font-black uppercase text-white">
                 {lastShot?.type || 'Awaiting swing'}
               </p>
               <p className="truncate text-[10px] font-black uppercase tracking-widest text-[#00f2ff]">
                 {lastShot?.timing ? `${lastShot.timing} timing` : 'No timing yet'}
               </p>
+              <div className="mt-2 h-1 overflow-hidden rounded-full bg-white/10">
+                <motion.div
+                  className="h-full bg-gradient-to-r from-cyan-300 to-emerald-400"
+                  animate={{ width: `${cvReadiness}%` }}
+                  transition={{ duration: 0.25 }}
+                />
+              </div>
             </div>
           </div>
         </div>

@@ -3,20 +3,20 @@ import { useGameStore } from '../stores/useGameStore';
 import { 
   Play, 
   Trophy, 
-  Gamepad2, 
   BarChart3, 
   Settings, 
-  BookOpen,
-  Users,
-  Bell
+  Bell,
+  ArrowRight
 } from 'lucide-react';
 
-const ActionCard = ({ title, icon: Icon, color, comingSoon, onClick, className = '' }: any) => (
+const ActionCard = ({ title, description, cta, icon: Icon, color, comingSoon, primary, onClick, className = '' }: any) => (
   <motion.div
     whileHover={{ scale: comingSoon ? 1 : 1.02, y: comingSoon ? 0 : -4 }}
     whileTap={{ scale: comingSoon ? 1 : 0.98 }}
     onClick={!comingSoon ? onClick : undefined}
-    className={`relative overflow-hidden glass-card p-5 flex flex-col justify-between h-[160px] cursor-pointer group transition-all duration-300 ${comingSoon ? 'opacity-50 cursor-not-allowed border-white/5 saturate-[0.5]' : 'hover:border-cyan-400/50'} ${className}`}
+    role="button"
+    aria-disabled={comingSoon}
+    className={`action-card flex h-[168px] flex-col justify-between group ${comingSoon ? 'opacity-50 cursor-not-allowed border-white/5 saturate-[0.5]' : 'tap-target'} ${primary ? 'border-cyan-300/30 bg-cyan-300/10' : ''} ${className}`}
   >
     {/* Decorative background icon */}
     <div className="absolute -right-4 -bottom-4 opacity-5 group-hover:opacity-10 transition-opacity rotate-12">
@@ -24,18 +24,27 @@ const ActionCard = ({ title, icon: Icon, color, comingSoon, onClick, className =
     </div>
 
     <div className="relative z-10 flex items-center justify-between">
-        <div className={`p-2.5 rounded-xl bg-white/5 border border-white/5 ${color} group-hover:scale-110 transition-transform`}>
+        <div className={`p-2.5 rounded-xl bg-white/[0.07] border border-white/10 ${color} group-hover:scale-110 transition-transform`}>
           <Icon size={24} />
         </div>
-        {!comingSoon && (title === 'SETTINGS' || title === 'QUICK PLAY' || title === 'ARSENAL') && (
-          <span className="text-[8px] font-black bg-cyan-400 text-black px-2 py-0.5 rounded-sm tracking-widest italic shadow-[0_0_15px_rgba(0,242,255,0.4)]">LIVE</span>
+        {!comingSoon && (
+          <span className={`status-pill ${primary ? 'border-cyan-300/30 text-cyan-200' : ''}`}>
+            {primary ? 'Start Here' : 'Open'}
+          </span>
         )}
     </div>
     
     <div className="relative z-10">
-        <h3 className="text-xl font-black tracking-tighter italic uppercase text-white/90 group-hover:text-white transition-colors">{title}</h3>
+        <h3 className="text-xl font-black tracking-tighter italic uppercase text-white group-hover:text-cyan-100 transition-colors">{title}</h3>
+        <p className="mt-1 text-xs font-bold leading-snug text-white/55">{description}</p>
+        {!comingSoon && (
+          <div className="mt-3 inline-flex items-center gap-1 text-[10px] font-black uppercase italic tracking-widest text-cyan-300">
+            {cta}
+            <ArrowRight size={12} />
+          </div>
+        )}
         {comingSoon && (
-          <p className="text-[9px] font-black tracking-[0.2em] uppercase text-cyan-400/50 mt-1 italic leading-none">SYSTEM.LOCK</p>
+          <p className="text-[9px] font-black tracking-[0.2em] uppercase text-cyan-400/50 mt-1 italic leading-none">Locked for now</p>
         )}
     </div>
   </motion.div>
@@ -46,7 +55,7 @@ export const Dashboard = () => {
   const user = useGameStore((state) => state.user);
 
   return (
-    <div className="flex-1 overflow-y-auto px-6 py-8 pb-32 font-sans relative">
+    <div className="screen-shell relative">
       {/* Lobby Specific Dynamic Background Layer - Vibrant Color */}
       <div className="absolute inset-0 z-[-1] pointer-events-none opacity-40 overflow-hidden">
         <img 
@@ -70,7 +79,7 @@ export const Dashboard = () => {
       </div>
 
       {/* Top Header */}
-      <header className="flex justify-between items-center mb-10 sticky top-0 z-40 py-2 bg-transparent">
+      <header className="flex justify-between items-center mb-8 sticky top-0 z-40 py-2 bg-transparent">
         <div className="flex items-center">
           <div className="relative mr-4">
             <div className="absolute -inset-1 bg-cyan-400/20 blur-xl rounded-full" />
@@ -86,15 +95,15 @@ export const Dashboard = () => {
             </div>
           </div>
           <div>
-            <p className="text-[9px] text-cyan-400 font-black tracking-[0.4em] uppercase opacity-50 mb-1 leading-none">ELITE OPERATOR</p>
+            <p className="eyebrow opacity-70 mb-1">Player Lobby</p>
             <h2 className="text-2xl font-black text-white uppercase italic tracking-tighter leading-none">{user?.name || 'System User'}</h2>
           </div>
         </div>
         <div className="flex space-x-2">
-          <button className="p-3 bg-white/5 rounded-2xl hover:bg-white/10 transition-colors border border-white/5 group">
+          <button className="btn-icon group" aria-label="Notifications">
              <Bell size={20} className="text-white/40 group-hover:text-white transition-colors" />
           </button>
-          <button className="p-3 bg-white/5 rounded-2xl hover:bg-white/10 transition-colors border border-white/5 group" onClick={() => setState('STATS')}>
+          <button className="btn-icon group" aria-label="Open performance stats" onClick={() => setState('STATS')}>
              <BarChart3 size={20} className="text-cyan-400 group-hover:scale-110 transition-transform" />
           </button>
         </div>
@@ -104,7 +113,7 @@ export const Dashboard = () => {
       <motion.div 
         initial={{ y: 20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
-        className="w-full h-[280px] rounded-[2.5rem] overflow-hidden relative mb-8 border border-white/10 shadow-[0_30px_60px_rgba(0,0,0,0.6)] group cursor-pointer"
+        className="w-full h-[280px] rounded-[2rem] overflow-hidden relative mb-8 border border-cyan-300/25 shadow-[0_30px_60px_rgba(0,0,0,0.6)] group cursor-pointer"
         onClick={() => setState('MATCH_SETTINGS')}
       >
         <img 
@@ -120,14 +129,15 @@ export const Dashboard = () => {
             <div className="flex space-x-1">
               {[1, 2, 3].map(i => <div key={i} className="w-1 h-3 bg-red-600 skew-x-12" />)}
             </div>
-            <span className="text-[10px] font-black tracking-[0.3em] text-white/70 uppercase italic">CHAMPIONS CIRCUIT LIVE</span>
+            <span className="text-[10px] font-black tracking-[0.3em] text-white/70 uppercase italic">Recommended First Step</span>
           </div>
           <h1 className="text-5xl font-black italic tracking-tighter mb-4 leading-[0.8] text-white uppercase drop-shadow-2xl">
-            WORLD SERIES<br/>ARENA OPEN
+            Start A<br/>Cricket Match
           </h1>
+          <p className="max-w-sm pb-4 text-sm font-bold text-white/70">Choose match format, team, and stadium before camera calibration.</p>
           <div className="flex items-center space-x-4">
-            <button className="bg-cyan-400 text-black text-[10px] font-black px-6 py-2.5 rounded-full tracking-widest italic hover:scale-105 transition-transform flex items-center space-x-2">
-              <span>ENTER STADIUM</span>
+            <button className="btn-primary min-h-0 px-5 py-2.5 text-[10px]">
+              <span>Set Up Match</span>
               <Play size={12} fill="currentColor" />
             </button>
             <div className="flex -space-x-2">
@@ -147,20 +157,27 @@ export const Dashboard = () => {
       {/* Action Grid */}
       <div className="grid grid-cols-2 gap-4 mb-10">
         <ActionCard 
-          title="QUICK PLAY" 
+          title="Quick Play" 
+          description="Set rules, pick a team, calibrate camera, then face the first ball."
+          cta="Set Up Match"
           icon={Play} 
           color="text-cyan-400" 
+          primary
           onClick={() => setState('MATCH_SETTINGS')}
           className="col-span-2 bg-gradient-to-r from-cyan-950/20 via-black/10 to-transparent border-cyan-500/20"
         />
         <ActionCard 
-          title="TOURNEY" 
+          title="World Tour" 
+          description="View tournament brackets and season progress."
+          cta="View Tour"
           icon={Trophy} 
           color="text-fuchsia-500" 
           onClick={() => setState('TOURNAMENT')}
         />
         <ActionCard 
-          title="ARSENAL" 
+          title="Settings" 
+          description="Adjust sound, haptics, graphics, privacy, and account options."
+          cta="Open Settings"
           icon={Settings} 
           color="text-cyan-400" 
           onClick={() => setState('SETTINGS')}
@@ -171,7 +188,7 @@ export const Dashboard = () => {
       <div className="glass-card p-6 flex justify-between items-center mb-10 border-white/5 relative overflow-hidden group">
         <div className="absolute top-0 right-0 w-32 h-32 bg-cyan-400/5 blur-3xl opacity-50 group-hover:opacity-100 transition-opacity" />
         <div className="flex flex-col">
-          <p className="text-[9px] text-gray-500 font-black uppercase tracking-[0.3em] mb-1 italic opacity-60">AVG SCORE</p>
+          <p className="section-label mb-1 opacity-60">Avg Score</p>
           <div className="flex items-baseline space-x-1">
             <span className="text-4xl font-black italic text-white leading-none">42.5</span>
             <span className="text-[10px] text-cyan-400 font-black italic">PR</span>
@@ -179,7 +196,7 @@ export const Dashboard = () => {
         </div>
         <div className="w-[1px] h-10 bg-white/10" />
         <div className="flex flex-col">
-          <p className="text-[9px] text-gray-500 font-black uppercase tracking-[0.3em] mb-1 italic opacity-60">RANK</p>
+          <p className="section-label mb-1 opacity-60">Rank</p>
           <span className="text-4xl font-black italic text-fuchsia-500 leading-none">#03</span>
         </div>
         <div className="w-[1px] h-10 bg-white/10" />

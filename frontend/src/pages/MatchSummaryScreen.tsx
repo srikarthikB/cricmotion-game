@@ -27,20 +27,21 @@ export const MatchSummaryScreen = () => {
         >
             <Trophy size={48} className="text-black" />
         </motion.div>
-        <h1 className="text-7xl font-black italic tracking-tighter neon-text uppercase leading-none drop-shadow-[0_0_20px_cyan]">VICTORY</h1>
-        <p className="text-cyan-400/60 font-black tracking-[0.4em] uppercase mt-4 text-[10px] italic">MATCH PROTOCOL COMPLETED</p>
+        <p className="eyebrow mb-3">Match Complete</p>
+        <h1 className="text-7xl font-black italic tracking-tighter neon-text uppercase leading-none drop-shadow-[0_0_20px_cyan]">Summary</h1>
+        <p className="helper-text mt-4">Review your result, then return to the lobby for another match.</p>
       </div>
 
       <div className="space-y-6">
           <div className="p-8 glass-card border-white/10 relative overflow-hidden group">
              <div className="absolute top-0 right-0 p-4 opacity-5 italic font-black text-8xl text-white group-hover:scale-110 transition-transform">WIN</div>
              <div>
-                <p className="text-[10px] text-cyan-400 font-black uppercase tracking-[0.3em] mb-2">FINAL SCORE</p>
+                <p className="section-label text-cyan-300 mb-2">Final Score</p>
                 <p className="text-6xl font-black italic text-white leading-none">{score.runs} <span className="text-2xl text-white/30">/ {score.wickets}</span></p>
              </div>
              <div className="mt-8 flex justify-between items-center">
                 <div>
-                   <p className="text-[10px] text-gray-500 font-black uppercase tracking-[0.2em] mb-1">STRIKE RATE</p>
+                   <p className="section-label mb-1">Strike Rate</p>
                    <p className="text-3xl font-black italic text-cyan-400 leading-none">{(score.runs / (score.balls || 1) * 100).toFixed(1)}</p>
                 </div>
                 <div className="flex space-x-1 items-end h-10">
@@ -53,17 +54,17 @@ export const MatchSummaryScreen = () => {
 
           <div className="grid grid-cols-2 gap-4">
              <div className="glass-card p-6 border-white/5">
-                <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest mb-1 italic">MAX POWER</p>
+                <p className="section-label mb-1">Max Power</p>
                 <p className="text-3xl font-black italic text-white">92%</p>
              </div>
              <div className="glass-card p-6 border-white/5">
-                <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest mb-1 italic">TIMING ACC.</p>
+                <p className="section-label mb-1">Timing Accuracy</p>
                 <p className="text-3xl font-black italic text-white">88%</p>
              </div>
           </div>
 
           <section className="pt-4">
-            <h3 className="text-[10px] font-black tracking-[0.3em] text-cyan-400/80 mb-4 uppercase italic">ACHIEVEMENTS</h3>
+            <h3 className="section-label text-cyan-300 mb-4">Achievements</h3>
             <div className="space-y-3">
                 {[
                     { title: 'CRITICAL HIT', desc: 'Smashed a 6 with perfect timing', icon: Zap, color: 'text-amber-400' },
@@ -84,15 +85,15 @@ export const MatchSummaryScreen = () => {
       </div>
 
       <div className="mt-10 flex space-x-4">
-          <button className="flex-1 py-4 glass-card flex items-center justify-center border-white/10 hover:bg-white/5">
+          <button className="btn-secondary flex-1">
              <Share2 size={20} className="mr-2" />
              <span className="font-bold tracking-widest italic uppercase">Share</span>
           </button>
           <button 
             onClick={() => setState('DASHBOARD')}
-            className="flex-[2] gradient-btn flex items-center justify-center"
+            className="btn-primary flex-[2]"
           >
-             <span className="font-bold tracking-widest italic uppercase">CONTINUE</span>
+             <span>Back To Lobby</span>
              <ChevronRight size={20} className="ml-1" />
           </button>
       </div>
