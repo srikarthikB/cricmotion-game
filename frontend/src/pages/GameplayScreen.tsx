@@ -10,7 +10,6 @@ export const GameplayScreen = () => {
   const score = useGameStore((state) => state.score);
   const updateScore = useGameStore((state) => state.updateScore);
   const backendMatch = useGameStore((state) => state.backendMatch);
-  const user = useGameStore((state) => state.user);
 
   // Audio Synthesizer helper for sound effects (Crisp & realistic Web Audio)
   const playAudioEffect = (type: 'HIT' | 'WICKET' | 'SWOOSH' | 'CROWD_ROAR') => {
@@ -90,14 +89,14 @@ export const GameplayScreen = () => {
   const [lastShot, setLastShot] = useState<{ runs: number; timing: string; type: string } | null>(null);
   const [swingState, setSwingState] = useState<'IDLE' | 'SWINGING' | 'RECOVERING'>('IDLE');
 
-  // Interactive Bat Coordination (Horizontal following cursor/drag)
+  // Interactive Bat Coordination (driven by temporary webcam motion data)
   const [batPosition, setBatPosition] = useState({ x: 50, y: 70 }); // percentages
   const [targetAngle, setTargetAngle] = useState(0); // aim angle based on bat offset
-  const [showMatchInfoMenu, setShowMatchInfoMenu] = useState(false);
 
   // Motion analysis states
   const [motionLevel, setMotionLevel] = useState(0);
-  const [isMotionEnabled, setIsMotionEnabled] = useState(false); // Default to off so mouse controls work flawlessy out of the box
+  const [isMotionEnabled] = useState(true);
+  const [cameraStatus, setCameraStatus] = useState<'BOOTING' | 'ACTIVE' | 'ERROR'>('BOOTING');
   const [motionTriggered, setMotionTriggered] = useState(false);
   const [poseCentroid, setPoseCentroid] = useState<{ x: number; y: number } | null>(null);
   const [poseJoints, setPoseJoints] = useState<{ x: number; y: number }[]>([]);
@@ -182,26 +181,6 @@ export const GameplayScreen = () => {
     }
   };
 
-  // Track Mouse / Touch movement on screen to calculate real-time bat tracking position
-  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!screenContainerRef.current || swingState !== 'IDLE' || isMotionEnabled) return;
-    const rect = screenContainerRef.current.getBoundingClientRect();
-    
-    // Normalized coordinates (0 to 100)
-    let relativeX = ((e.clientX - rect.left) / rect.width) * 100;
-    let relativeY = ((e.clientY - rect.top) / rect.height) * 100;
-    
-    // Constraint values to keep the striker at the batting crease zone
-    relativeX = Math.max(15, Math.min(85, relativeX));
-    relativeY = Math.max(60, Math.min(92, relativeY));
-    
-    // Dynamically calculate batting angles based on crease positioning
-    const centralAngle = (relativeX - 50) * 1.3; // Swing angle range -45deg to 45deg
-    
-    setBatPosition({ x: relativeX, y: relativeY });
-    setTargetAngle(centralAngle);
-  };
-
   // Setup Web Camera
   useEffect(() => {
     let activeStream: MediaStream | null = null;
@@ -220,6 +199,7 @@ export const GameplayScreen = () => {
         activeStream = stream;
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
+          setCameraStatus('ACTIVE');
           videoRef.current.play().catch(playErr => {
             console.warn("Video play triggered user action required:", playErr);
           });
@@ -237,10 +217,12 @@ export const GameplayScreen = () => {
           activeStream = fallbackStream;
           if (videoRef.current) {
             videoRef.current.srcObject = fallbackStream;
+            setCameraStatus('ACTIVE');
             videoRef.current.play().catch(() => {});
           }
         } catch (err) {
           console.error("Camera access failed entirely:", err);
+          setCameraStatus('ERROR');
         }
       }
     }
@@ -409,7 +391,7 @@ export const GameplayScreen = () => {
     return () => clearInterval(ballTimer);
   }, [ballState, selectedDelivery]);
 
-  // Face next ball trigger (Taps the crease)
+  // Face next ball trigger, now driven by the match loop instead of UI buttons.
   const faceNextBall = () => {
     if (bowlerState !== 'IDLE' && bowlerState !== 'RELEASED') return;
     
@@ -430,6 +412,18 @@ export const GameplayScreen = () => {
     setBowlerArmRotation(0);
     setMotionTriggered(false);
   };
+
+  useEffect(() => {
+    if (!backendMatch) return;
+    if (bowlerState === 'RUNNING' || bowlerState === 'DELIVERING' || ballState === 'RELEASED') return;
+
+    const delay = ballState === 'IDLE' && score.balls === 0 ? 800 : 2200;
+    const timer = window.setTimeout(() => {
+      faceNextBall();
+    }, delay);
+
+    return () => window.clearTimeout(timer);
+  }, [backendMatch, bowlerState, ballState, score.balls]);
 
   // Evaluate swing outcome
   const swingBat = async () => {
@@ -521,18 +515,6 @@ export const GameplayScreen = () => {
     isResolvingBallRef.current = false;
   };
 
-  // Keyboard Spacebar integration
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.code === 'Space') {
-        e.preventDefault();
-        swingBat();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [swingState, ballState, ballProgress, batPosition]);
-
   useEffect(() => {
     if (!backendMatch) {
       setState('MATCH_SETTINGS');
@@ -546,9 +528,19 @@ export const GameplayScreen = () => {
   const totalBalls = totalOvers * 6;
   const ballsLeft = Math.max(0, totalBalls - score.balls);
   
-  const strikeRate = score.balls > 0 
-    ? ((score.runs / score.balls) * 100).toFixed(1) 
-    : '0.0';
+  const motionStatus = cameraStatus === 'ERROR'
+    ? 'CAMERA UNAVAILABLE'
+    : motionLevel > 28
+      ? 'SWING DETECTED'
+      : ballState === 'RELEASED'
+        ? 'WAITING FOR SWING...'
+        : 'TRACKING STANCE';
+
+  const motionStatusColor = cameraStatus === 'ERROR'
+    ? 'text-rose-400'
+    : motionLevel > 28
+      ? 'text-emerald-400'
+      : 'text-[#00f2ff]';
 
   // Compute Ball position for visual rendering (parabolic physics)
   const ballVisuals = () => {
@@ -617,7 +609,6 @@ export const GameplayScreen = () => {
     <div 
       id="gameplay_container"
       ref={screenContainerRef}
-      onPointerMove={handlePointerMove}
       className="flex-1 flex flex-col relative bg-black overflow-hidden font-sans select-none touch-none"
     >
       {/* 1. STADIUM BACKGROUND (Batsman POV perspective looking downstream) */}
@@ -646,167 +637,50 @@ export const GameplayScreen = () => {
         {/* Ambient Stadium center glow */}
         <div className="absolute top-[20%] left-1/2 -translate-x-1/2 w-[70%] h-[35%] bg-blue-500/[0.04] rounded-full blur-[90px]" />
 
-        {/* Floating atmospheric elements */}
-        <div className="absolute inset-0 z-0">
-          <div className="absolute top-[35%] left-[25%] w-1.5 h-1.5 bg-yellow-400/20 rounded-full blur-[1px] animate-pulse" />
-          <div className="absolute top-[50%] left-[75%] w-2 h-2 bg-yellow-400/15 rounded-full blur-[2px] animate-bounce" style={{ animationDuration: '6s' }} />
-          <div className="absolute top-[28%] left-[60%] w-1.5 h-1.5 bg-cyan-400/20 rounded-full blur-[1px]" />
-        </div>
-
         <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-transparent to-black/35" />
       </div>
 
-      {/* 2. CLONED HIGH-FIDELITY SMARTPHONE HUD HEADER CONTAINER
-          Perfect matches layout from the supplied screenshot */}
-      <div className="absolute top-2 left-1/2 -translate-x-1/2 w-[94%] max-w-lg bg-neutral-950/90 backdrop-blur-md rounded-2xl p-3 border border-neutral-800 shadow-[0_12px_24px_rgba(0,0,0,0.85)] z-40 flex items-center justify-between">
-        
-        {/* A. LEFT COLUMN: HAMBURGER, SCORE AND OVER GAUGE */}
-        <div id="hud_left_col" className="flex flex-col flex-1 pr-3">
-          <div className="flex items-center space-x-2">
-            {/* Hamburger list layout icon in Cyan color */}
-            <button 
-              onClick={() => setShowMatchInfoMenu(!showMatchInfoMenu)}
-              className="p-1 hover:bg-white/5 rounded-md transition-colors pointer-events-auto"
-            >
-              <svg className="w-5 h-5 text-[#00f2ff]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                <line x1="4" y1="6" x2="20" y2="6" />
-                <line x1="4" y1="12" x2="20" y2="12" />
-                <line x1="4" y1="18" x2="20" y2="18" />
-              </svg>
-            </button>
-
-            {/* Huge bold score digits: "Runs-Wickets" in condensed heavy weight */}
-            <span className="text-3xl md:text-4xl font-extrabold text-white tracking-widest font-mono drop-shadow-[0_2px_4px_black]">
-              {score.runs}-{score.wickets}
-            </span>
-          </div>
-
-          <div className="flex items-baseline space-x-1.5 mt-0.5 ml-1">
-            {/* Current Over inside parentheses e.g. (0.0) */}
-            <span className="text-xs font-black text-neutral-400 font-mono tracking-wider">
-              ({score.overProgress})
-            </span>
-          </div>
-
-          {/* Indigo/Violet battery progress bar with a helmet icon */}
-          <div className="flex items-center space-x-2 mt-2 w-full">
-            <div className="text-neutral-400">
-              {/* Helmet icon/avatar representation */}
-              <svg className="w-4 h-4 text-purple-400 fill-purple-400/20" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 2C6.48 2 2 6.48 2 12c0 1.95.56 3.77 1.53 5.31L2.5 22l4.69-1.03C8.73 21.44 10.3 21.75 12 21.75c5.52 0 10-4.43 10-9.75S17.52 2 12 2zm1 14.5h-2v-2h2v2zm0-4h-2v-4h2v4z" />
-              </svg>
+      <div className="absolute top-4 left-1/2 -translate-x-1/2 w-[calc(100%-2rem)] max-w-4xl z-40 pointer-events-none">
+        <div className="bg-neutral-950/80 backdrop-blur-md border border-white/10 rounded-2xl shadow-[0_16px_40px_rgba(0,0,0,0.45)] px-4 py-3 md:px-5">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div className="flex items-end gap-3">
+              <div>
+                <p className="text-[9px] font-black uppercase tracking-[0.28em] text-[#00f2ff]/70 italic">Score</p>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-5xl md:text-6xl font-black text-white tracking-tight leading-none">{score.runs}</span>
+                  <span className="text-2xl md:text-3xl font-black text-white/45 leading-none">/ {score.wickets}</span>
+                </div>
+              </div>
+              <div className="pb-1 text-xs md:text-sm font-black uppercase tracking-widest text-white/55">
+                {score.overProgress} ov
+              </div>
             </div>
-            {/* The actual progress bar */}
-            <div className="flex-1 h-3 bg-neutral-900 rounded-full overflow-hidden border border-neutral-800">
-              <motion.div 
-                className="h-full bg-gradient-to-r from-purple-500 to-indigo-400 shadow-[0_0_8px_#c084fc]"
-                animate={{ width: `${Math.min(100, (score.balls / totalBalls) * 100)}%` }}
-                transition={{ duration: 0.4 }}
-              />
+
+            <div className="grid grid-cols-3 gap-2 md:min-w-[330px]">
+              <div className="rounded-xl bg-white/[0.04] border border-white/10 px-3 py-2">
+                <p className="text-[8px] font-black uppercase tracking-[0.25em] text-white/35">Target</p>
+                <p className="text-xl font-black text-white leading-tight">{target}</p>
+              </div>
+              <div className="rounded-xl bg-white/[0.04] border border-white/10 px-3 py-2">
+                <p className="text-[8px] font-black uppercase tracking-[0.25em] text-white/35">Left</p>
+                <p className="text-xl font-black text-[#00f2ff] leading-tight">{ballsLeft}</p>
+              </div>
+              <div className="rounded-xl bg-white/[0.04] border border-white/10 px-3 py-2">
+                <p className="text-[8px] font-black uppercase tracking-[0.25em] text-white/35">Ball</p>
+                <p className="text-sm font-black text-white uppercase leading-tight">{selectedDelivery}</p>
+              </div>
             </div>
           </div>
-        </div>
 
-        {/* B. CENTER COLUMN: BOWLER SPEED TEXT LABEL & RED BALL ICON OVERLAY + HUGE CYAN CYBER COUNTER */}
-        <div id="hud_center_col" className="flex flex-col items-center justify-center border-x border-neutral-800/80 px-4 text-center min-w-[120px]">
-          <div className="flex items-center space-x-1 justify-center">
-            {/* flying mini cricket ball with motion streaks layout */}
-            <svg className="w-4 h-4 text-red-500 animate-pulse" viewBox="0 0 24 24" fill="currentColor">
-              <path d="m21.9 11.23-1.88-.38c.07-.41.07-.82.02-1.23l1.83-.55c.29-.09.43-.39.34-.67L20.89 4.3c-.09-.28-.39-.43-.67-.34l-1.83.55c-.29-.29-.62-.53-.98-.73l.63-1.81c.1-.28-.05-.59-.34-.68l-4.1-.73c-.28-.05-.59.1-.68.34l-.63 1.8c-.41-.05-.83-.04-1.24.03l-.42-1.87c-.06-.29-.35-.47-.64-.4l-4.1.91c-.29.07-.47.35-.4.64l.42 1.88c-.37.19-.7.43-.99.71L3.92 3.65c-.2-.2-.53-.2-.73 0L.3 6.54c-.2.2-.2.53 0 .73l1.31 1.31c-.24.33-.43.71-.56 1.11L.3 10.37c-.22.2-.26.54-.08.79l2.4 3.39c.18.25.53.31.79.13l.75-.54c.2.35.45.67.74.94l-1.07 1.57c-.16.24-.09.57.15.73l3.39 2.22c.24.16.57.09.73-.15l1.07-1.57c.37.16.76.27 1.17.33l-.22 1.91c-.03.29.17.55.46.59l4.1.45c.29.03.55-.17.59-.46l.22-1.92c.41.01.82-.04 1.22-.15l.59 1.83c.09.28.39.43.68.34l4.1-1.32c.28-.09.43-.39.34-.68l-.59-1.82c.31-.22.59-.49.83-.79l1.63 1.01c.25.15.58.07.74-.18l2.25-3.56c.16-.25.08-.58-.17-.74l-1.64-1zM11.6 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z" />
-            </svg>
-            <span className="text-sm font-black tracking-widest text-white uppercase italic">
-              {selectedDelivery}
-            </span>
-          </div>
-
-          <span className="text-[10px] font-bold text-neutral-400 tracking-wider uppercase mt-1">
-            BALLS LEFT
-          </span>
-          {/* Huge neon cyan characters matched exactly */}
-          <span className="text-4xl md:text-5xl font-black text-[#00f2ff] tracking-tight font-sans mt-0.5 leading-none">
-            {ballsLeft}
-          </span>
-        </div>
-
-        {/* C. RIGHT COLUMN: BEAUTIFUL CIRCULAR RADAR FIELD MAP WIDGET
-            Dynamic view of fielders vector circles from above */}
-        <div id="hud_right_col" className="flex items-center justify-end flex-1 pl-3 pointer-events-auto">
-          <div className="relative w-16 h-16 rounded-full border border-neutral-700 bg-neutral-900 shadow-inner flex items-center justify-center">
-            
-            {/* Center Turf Pitch Line overlay */}
-            <div className="absolute w-[2.5px] h-6 bg-amber-700/60 rounded-sm transform rotate-12" />
-
-            {/* Dynamic Highlight direction slice based on slider/bat placement */}
-            <svg className="absolute inset-0 w-full h-full transform -rotate-90 pointer-events-none" viewBox="0 0 100 100">
-              {/* Sector slice highlight covering the wedge area */}
-              <path 
-                d="M50,50 L85,30 A40,40 0 0,1 85,70 Z" 
-                fill="#14b8a6" 
-                fillOpacity="0.25"
-                stroke="#14b8a6"
-                strokeWidth="0.8"
-                className="transition-all duration-300"
-                style={{ 
-                  transformOrigin: '50px 50px',
-                  transform: `rotate(${targetAngle}deg)`
-                }}
-              />
-              
-              {/* 11 circular fielder position coordinates */}
-              <circle cx="20" cy="50" r="2.5" fill="white" />
-              <circle cx="32" cy="25" r="2.5" fill="white" />
-              <circle cx="45" cy="15" r="2.5" fill="white" />
-              <circle cx="68" cy="22" r="2.5" fill="white" />
-              <circle cx="80" cy="42" r="2.5" fill="white" />
-              <circle cx="78" cy="65" r="2.5" fill="white" />
-              <circle cx="58" cy="85" r="2.5" fill="white" />
-              <circle cx="35" cy="82" r="2.5" fill="white" />
-              <circle cx="24" cy="68" r="2.5" fill="white" />
-              <circle cx="50" cy="40" r="3" fill="cyan" className="animate-pulse" /> {/* Ball/bowler spot */}
-              <circle cx="50" cy="65" r="3" fill="#f43f5e" /> {/* Striker spot */}
-            </svg>
+          <div className="mt-3 h-1.5 bg-white/10 rounded-full overflow-hidden">
+            <motion.div 
+              className="h-full bg-gradient-to-r from-[#00f2ff] to-emerald-400"
+              animate={{ width: `${Math.min(100, (score.balls / totalBalls) * 100)}%` }}
+              transition={{ duration: 0.4 }}
+            />
           </div>
         </div>
       </div>
-
-      {/* Hamburger Menu Overlay Dropdown */}
-      <AnimatePresence>
-        {showMatchInfoMenu && (
-          <motion.div 
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            className="absolute top-24 left-[3%] w-[94%] max-w-sm bg-neutral-950/95 backdrop-blur-2xl border border-neutral-800 rounded-2xl p-4 shadow-2xl z-50 flex flex-col space-y-3"
-          >
-            <div className="flex justify-between items-center border-b border-neutral-800 pb-2">
-              <span className="text-xs font-black text-[#00f2ff] tracking-widest uppercase italic">MATCH OVERVIEW</span>
-              <button onClick={() => setShowMatchInfoMenu(false)} className="text-white/40 hover:text-white text-xs">Close</button>
-            </div>
-            <div className="grid grid-cols-2 gap-3 text-xs">
-              <div className="bg-neutral-900/60 p-2 rounded-lg border border-neutral-800">
-                <span className="text-neutral-500 block">Striker</span>
-                <span className="text-white uppercase font-black font-mono">{user?.name ? user.name.split('@')[0] : 'VJAGDEEPSAI'}</span>
-              </div>
-              <div className="bg-neutral-900/60 p-2 rounded-lg border border-neutral-800">
-                <span className="text-neutral-500 block">Strike Rate</span>
-                <span className="text-[#00f2ff] font-mono font-bold">{strikeRate}</span>
-              </div>
-              <div className="bg-neutral-900/60 p-2 rounded-lg border border-neutral-800">
-                <span className="text-neutral-500 block">Balls Played</span>
-                <span className="text-white font-mono font-bold">{score.balls}</span>
-              </div>
-              <div className="bg-neutral-900/60 p-2 rounded-lg border border-neutral-800">
-                <span className="text-neutral-500 block">Match Overs</span>
-                <span className="text-white font-mono font-bold">{totalOvers} Overs</span>
-              </div>
-              <div className="bg-neutral-900/60 p-2 rounded-lg border border-neutral-800">
-                <span className="text-neutral-500 block">Target</span>
-                <span className="text-white font-mono font-bold">{target}</span>
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       {/* 3. SIMULATION VIEWPORT & ANIMATED ENTITIES */}
       <div className="relative flex-1 flex flex-col items-center justify-center z-10 pointer-events-none mt-20">
@@ -1181,12 +1055,22 @@ export const GameplayScreen = () => {
         <AnimatePresence>
           {lastShot && (
             <motion.div
-              initial={{ scale: 0.6, opacity: 0, y: 10 }}
-              animate={{ scale: 1.15, opacity: 1, y: -45 }}
-              exit={{ scale: 1.3, opacity: 0 }}
+              initial={{ opacity: 0, y: 14 }}
+              animate={{ opacity: 1, y: -36 }}
+              exit={{ opacity: 0, y: -56 }}
               className="z-50 text-center pointer-events-none pb-12"
             >
-              <h1 className="text-5xl md:text-6xl font-black italic tracking-tighter drop-shadow-[0_4px_16px_rgba(0,242,255,0.4)] text-white">
+              <div className="inline-flex items-center gap-4 rounded-2xl border border-white/10 bg-neutral-950/85 px-5 py-3 shadow-[0_16px_40px_rgba(0,0,0,0.45)] backdrop-blur-md">
+                <span className={`text-3xl md:text-4xl font-black italic leading-none ${lastShot.runs >= 4 ? 'text-[#00f2ff]' : lastShot.runs > 0 ? 'text-emerald-400' : lastShot.timing.includes('BOWLED') ? 'text-rose-400' : 'text-white/70'}`}>
+                  {lastShot.runs === 0 ? '0' : `+${lastShot.runs}`}
+                </span>
+                <div className="text-left">
+                  <p className="text-[9px] font-black uppercase tracking-[0.28em] text-white/35">Shot</p>
+                  <p className="text-sm md:text-base font-black uppercase text-white">{lastShot.type}</p>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-[#00f2ff]">{lastShot.timing} timing</p>
+                </div>
+              </div>
+              <div className="hidden">
                 {lastShot.runs === 6 && (
                   <span className="text-fuchsia-400 uppercase tracking-tight">MASSIVE SIX!</span>
                 )}
@@ -1202,9 +1086,9 @@ export const GameplayScreen = () => {
                 {lastShot.runs === 0 && !lastShot.timing.includes('BOWLED') && (
                   <span className="text-gray-400 uppercase tracking-widest">DOT BALL!</span>
                 )}
-              </h1>
+              </div>
               
-              <div className="inline-flex mt-4 px-6 py-2 bg-slate-950/90 border border-neutral-800 text-white font-black italic tracking-widest uppercase items-center space-x-2 text-xs rounded-xl">
+              <div className="hidden">
                 <Sparkles size={12} className="text-cyan-400 animate-spin" />
                 <span>{lastShot.timing} TIMING</span>
                 <span className="text-white/30">•</span>
@@ -1215,115 +1099,51 @@ export const GameplayScreen = () => {
         </AnimatePresence>
       </div>
 
-      {/* 4. DUAL MODE INPUTS BAR (Bottom left gesture webcam module and bottom-right click interaction) */}
-      <div className="absolute inset-x-0 bottom-6 px-6 flex justify-between items-end z-20 pointer-events-none">
-        
-        {/* A. OPTIONAL GESTURE SENSORS BOX */}
-        <div className="w-52 bg-slate-950/95 backdrop-blur-md rounded-2xl p-2.5 border border-neutral-800 shadow-[0_12px_24px_rgba(0,0,0,0.8)] flex flex-col space-y-2 pointer-events-auto">
-          {isMotionEnabled ? (
-            <div className="relative aspect-[4/3] rounded-xl overflow-hidden bg-zinc-900 border border-neutral-800">
-              <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover scale-x-[-1] opacity-75" />
+      <div className="absolute inset-x-0 bottom-4 px-4 z-20 pointer-events-none">
+        <div className="mx-auto max-w-4xl rounded-2xl border border-white/10 bg-neutral-950/80 backdrop-blur-md shadow-[0_16px_40px_rgba(0,0,0,0.45)] p-3 md:p-4">
+          <div className="grid grid-cols-[5.5rem_1fr] md:grid-cols-[6rem_1fr_13rem] gap-3 md:gap-4 items-center">
+            <div className="relative aspect-[4/3] overflow-hidden rounded-xl border border-white/10 bg-black">
+              <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover scale-x-[-1] opacity-80" />
               <canvas ref={hiddenCanvasRef} className="hidden" width={32} height={24} />
-              
-              {/* Dynamic Live Pose estimation cyber skeleton overlay */}
-              <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 32 24">
-                {poseJoints.length > 0 && (
-                  <g stroke="#00f2ff" strokeWidth="0.5" opacity="0.85">
-                    {/* Draw spine bone */}
-                    <line x1={poseJoints[0].x} y1={poseJoints[0].y} x2={poseJoints[1].x} y2={poseJoints[1].y} />
-                    {/* Draw arms bones */}
-                    <line x1={poseJoints[0].x} y1={poseJoints[0].y} x2={poseJoints[2].x} y2={poseJoints[2].y} />
-                    <line x1={poseJoints[0].x} y1={poseJoints[0].y} x2={poseJoints[3].x} y2={poseJoints[3].y} />
-                    {/* Draw legs bones */}
-                    <line x1={poseJoints[0].x} y1={poseJoints[0].y} x2={poseJoints[4].x} y2={poseJoints[4].y} />
-                    <line x1={poseJoints[0].x} y1={poseJoints[0].y} x2={poseJoints[5].x} y2={poseJoints[5].y} />
-                    
-                    {/* Joint Indicator Dots */}
-                    {poseJoints.map((joint, index) => (
-                      <circle 
-                        key={index} 
-                        cx={joint.x} 
-                        cy={joint.y} 
-                        r={index === 1 ? 0.9 : 0.6} 
-                        fill={index === 1 ? "#ef4444" : "#00f2ff"} 
-                        stroke="#09333f" 
-                        strokeWidth="0.15" 
-                      />
-                    ))}
-                  </g>
-                )}
-              </svg>
-
-              <div className="absolute inset-2 border border-[#00f2ff]/20 rounded-lg pointer-events-none" />
-              <div className="absolute top-1.5 left-1.5 flex items-center space-x-1 bg-black/75 px-2 py-0.5 rounded-full">
-                <div className="w-1 h-1 bg-red-500 rounded-full animate-pulse" />
-                <span className="text-[6px] font-black text-white tracking-widest uppercase">REAL POSING</span>
-              </div>
-              
-              <div className="absolute bottom-1.5 inset-x-1.5 bg-neutral-950/90 px-1.5 py-0.5 border border-[#00f2ff]/20 rounded text-center">
-                <span className="text-[6.5px] font-black text-[#00f2ff] uppercase tracking-widest animate-pulse block">
-                  {motionLevel > 18 ? "⚡ SWING DETECTED" : "WAVE HANDS TO HIT"}
-                </span>
+              <div className="absolute inset-0 border border-[#00f2ff]/20 rounded-xl" />
+              <div className="absolute left-1.5 top-1.5 flex items-center gap-1 rounded-full bg-black/70 px-1.5 py-0.5">
+                <span className={`h-1.5 w-1.5 rounded-full ${cameraStatus === 'ACTIVE' ? 'bg-emerald-400' : cameraStatus === 'ERROR' ? 'bg-rose-500' : 'bg-amber-400'}`} />
+                <span className="text-[6px] font-black uppercase tracking-widest text-white">{cameraStatus}</span>
               </div>
             </div>
-          ) : (
-            <div className="bg-neutral-900/40 border border-neutral-800 rounded-xl p-2 text-center">
-              <p className="text-[9px] text-neutral-400 font-medium">Use mouse movement or touch drag to move the cricket bat naturally.</p>
-            </div>
-          )}
 
-          <div className="flex flex-col space-y-1">
-            <div className="flex items-center justify-between">
-              <button 
-                onClick={() => setIsMotionEnabled(!isMotionEnabled)}
-                className={`text-[8.5px] font-black uppercase tracking-wider px-2 py-1 rounded-lg transition-all border ${isMotionEnabled ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20' : 'bg-neutral-900 text-neutral-500 border-neutral-800'}`}
-              >
-                {isMotionEnabled ? 'Webcam ON' : 'Webcam OFF'}
-              </button>
-              {isMotionEnabled && <div className="text-[7.5px] font-mono text-neutral-500">LEVEL: {motionLevel.toFixed(0)}</div>}
-            </div>
-
-            {isMotionEnabled && (
-              <div className="h-1 bg-neutral-900 rounded-full overflow-hidden flex items-center">
-                <motion.div 
-                  className={`h-full ${motionLevel > 28 ? 'bg-emerald-400' : 'bg-cyan-400'}`}
+            <div className="min-w-0">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-[8px] font-black uppercase tracking-[0.28em] text-white/35 italic">Webcam Input</p>
+                  <p className={`text-xl md:text-3xl font-black uppercase italic tracking-tight ${motionStatusColor}`}>
+                    {motionStatus}
+                  </p>
+                </div>
+                <div className="hidden sm:block text-right">
+                  <p className="text-[8px] font-black uppercase tracking-[0.25em] text-white/35 italic">Delivery</p>
+                  <p className="text-sm font-black uppercase text-white">{selectedDelivery}{selectedDelivery === 'SPIN' ? ` / ${spinType}` : ''}</p>
+                </div>
+              </div>
+              <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/10">
+                <motion.div
+                  className={`h-full ${motionLevel > 28 ? 'bg-emerald-400' : 'bg-[#00f2ff]'}`}
                   animate={{ width: `${Math.min(100, (motionLevel / 60) * 100)}%` }}
                   transition={{ duration: 0.1 }}
                 />
               </div>
-            )}
-          </div>
-        </div>
-
-        {/* B. BATTING TRIGGER ACTIONS & CREASE TAPPING PANEL */}
-        <div className="flex flex-col space-y-3.5 items-end pointer-events-auto">
-          <div className="bg-neutral-950/95 backdrop-blur-md border border-neutral-800 p-2.5 rounded-2xl flex space-x-3.5 items-center">
-            <div className="flex flex-col">
-              <span className="text-[7.5px] font-bold text-neutral-500 uppercase tracking-widest italic">DELIVERY TYPE</span>
-              <span className="text-xs font-black text-[#00f2ff] tracking-wide uppercase">
-                {selectedDelivery} {selectedDelivery === 'SPIN' ? `(${spinType})` : ''}
-              </span>
             </div>
-            
-            <button 
-              onClick={faceNextBall}
-              disabled={bowlerState === 'RUNNING' || bowlerState === 'DELIVERING' || ballState === 'RELEASED'}
-              className="py-1.5 px-3 bg-[#00f2ff]/10 border border-[#00f2ff]/30 text-[#00f2ff] hover:bg-[#00f2ff] hover:text-black rounded-lg text-[9px] font-extrabold uppercase tracking-wider transition-all flex items-center space-x-1.5 disabled:opacity-40"
-            >
-              <RefreshCw size={10} />
-              <span>NEXT ENCOUNTER</span>
-            </button>
-          </div>
 
-          <motion.button 
-            whileHover={{ scale: 1.04 }}
-            whileTap={{ scale: 0.96 }}
-            onClick={swingBat}
-            className="px-8 py-4.5 rounded-3xl bg-gradient-to-r from-cyan-400 to-[#14b8a6] text-black font-black italic tracking-[0.2em] text-sm hover:from-cyan-300 hover:to-teal-400 shadow-[0_0_30px_rgba(0,242,255,0.4)] uppercase border border-cyan-300 flex items-center space-x-2"
-          >
-            <Zap size={16} className="fill-black" />
-            <span>PLAY SHOT</span>
-          </motion.button>
+            <div className="col-span-2 md:col-span-1 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2">
+              <p className="text-[8px] font-black uppercase tracking-[0.25em] text-white/35 italic">Current Shot</p>
+              <p className="truncate text-sm md:text-base font-black uppercase text-white">
+                {lastShot?.type || 'Awaiting swing'}
+              </p>
+              <p className="truncate text-[10px] font-black uppercase tracking-widest text-[#00f2ff]">
+                {lastShot?.timing ? `${lastShot.timing} timing` : 'No timing yet'}
+              </p>
+            </div>
+          </div>
         </div>
       </div>
     </div>
