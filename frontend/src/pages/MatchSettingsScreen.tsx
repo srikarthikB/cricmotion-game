@@ -90,6 +90,8 @@ export const MatchSettingsScreen = () => {
                   <img 
                       src={`https://flagcdn.com/w320/${team.code}.png`} 
                       alt={team.name}
+                      loading="lazy"
+                      decoding="async"
                       className="w-full h-full object-cover"
                   />
                   {config.team === team.id && (
@@ -116,7 +118,13 @@ export const MatchSettingsScreen = () => {
                     aria-label={`Select ${venue.name}`}
                     className={`flex-shrink-0 w-64 aspect-video rounded-[1.5rem] overflow-hidden cursor-pointer border-2 transition-all duration-500 snap-center relative ${config.venue === venue.id ? 'border-cyan-400 scale-105 z-10 shadow-[0_0_40px_rgba(34,211,238,0.25)]' : 'border-white/10 opacity-70 hover:opacity-100'}`}
                 >
-                    <img src={venue.img} alt={venue.name} className="w-full h-full object-cover brightness-75 group-hover:brightness-100" />
+                    <img
+                      src={venue.img}
+                      alt={venue.name}
+                      loading="lazy"
+                      decoding="async"
+                      className="w-full h-full object-cover brightness-75 group-hover:brightness-100"
+                    />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent flex items-end p-4">
                         <span className="text-xs font-black text-white uppercase tracking-wider italic">{venue.name}</span>
                     </div>

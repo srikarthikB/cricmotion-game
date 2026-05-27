@@ -1,15 +1,19 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useGameStore } from '../stores/useGameStore';
 import { apiService } from '../services/apiService';
+import { getVenueById } from '../constants';
 import { BallResultResponse, PredictShotResponse } from '../types';
-import { Pause, Target, Zap, Activity, Shield, Users, Camera, RefreshCw, Sparkles, Award } from 'lucide-react';
+import { Pause, Target, Zap, Activity, Shield, Users, Camera, RefreshCw, Sparkles, Award, Home } from 'lucide-react';
 
 export const GameplayScreen = () => {
   const setState = useGameStore((state) => state.setState);
   const score = useGameStore((state) => state.score);
   const updateScore = useGameStore((state) => state.updateScore);
   const backendMatch = useGameStore((state) => state.backendMatch);
+  const selectedVenueId = useGameStore((state) => state.matchConfig.venue);
+  const setBackendMatch = useGameStore((state) => state.setBackendMatch);
+  const resetScore = useGameStore((state) => state.resetScore);
 
   // Audio Synthesizer helper for sound effects (Crisp & realistic Web Audio)
   const playAudioEffect = (type: 'HIT' | 'WICKET' | 'SWOOSH' | 'CROWD_ROAR') => {
@@ -65,15 +69,15 @@ export const GameplayScreen = () => {
     }
   };
 
-  // Assets and paths
-  const cricketBg = new URL('../assets/images/cricket_pitch_view_1779289157758.png', import.meta.url).href;
-  const backupBg = "https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?auto=format&fit=crop&q=80&w=1200";
+  const selectedVenue = getVenueById(selectedVenueId);
+  const cricketBg = selectedVenue.gameplayBg;
 
   // References
   const videoRef = useRef<HTMLVideoElement>(null);
   const hiddenCanvasRef = useRef<HTMLCanvasElement>(null);
   const prevFrameDataRef = useRef<Uint8ClampedArray | null>(null);
   const screenContainerRef = useRef<HTMLDivElement>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
 
   // Bowler & Delivery States
   const [bowlerState, setBowlerState] = useState<'IDLE' | 'RUNNING' | 'DELIVERING' | 'RELEASED'>('IDLE');
@@ -181,9 +185,38 @@ export const GameplayScreen = () => {
     }
   };
 
+  const stopCameraStream = useCallback(() => {
+    const activeStream = mediaStreamRef.current;
+
+    if (activeStream) {
+      activeStream.getTracks().forEach((track) => {
+        track.stop();
+      });
+      mediaStreamRef.current = null;
+    }
+
+    if (videoRef.current) {
+      videoRef.current.pause();
+      videoRef.current.srcObject = null;
+    }
+
+    prevFrameDataRef.current = null;
+    setCameraStatus(isMotionEnabled ? 'BOOTING' : 'ERROR');
+    setMotionLevel(0);
+    setMotionTriggered(false);
+    setPoseCentroid(null);
+    setPoseJoints([]);
+  }, [isMotionEnabled]);
+
+  const exitToDashboard = () => {
+    stopCameraStream();
+    setBackendMatch(null);
+    resetScore();
+    setState('DASHBOARD');
+  };
+
   // Setup Web Camera
   useEffect(() => {
-    let activeStream: MediaStream | null = null;
     let isCancelled = false;
 
     async function setupCamera() {
@@ -196,7 +229,8 @@ export const GameplayScreen = () => {
           stream.getTracks().forEach(track => track.stop());
           return;
         }
-        activeStream = stream;
+        stopCameraStream();
+        mediaStreamRef.current = stream;
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
           setCameraStatus('ACTIVE');
@@ -214,7 +248,8 @@ export const GameplayScreen = () => {
             fallbackStream.getTracks().forEach(track => track.stop());
             return;
           }
-          activeStream = fallbackStream;
+          stopCameraStream();
+          mediaStreamRef.current = fallbackStream;
           if (videoRef.current) {
             videoRef.current.srcObject = fallbackStream;
             setCameraStatus('ACTIVE');
@@ -235,16 +270,18 @@ export const GameplayScreen = () => {
       return () => {
         isCancelled = true;
         clearTimeout(timer);
-        if (activeStream) {
-          activeStream.getTracks().forEach(track => track.stop());
-        }
+        stopCameraStream();
       };
     } else {
-      if (activeStream) {
-        activeStream.getTracks().forEach(track => track.stop());
-      }
+      stopCameraStream();
     }
-  }, [isMotionEnabled]);
+  }, [isMotionEnabled, stopCameraStream]);
+
+  useEffect(() => {
+    return () => {
+      stopCameraStream();
+    };
+  }, [stopCameraStream]);
 
   // Motion & Dynamic Live Pose Detection Hook
   useEffect(() => {
@@ -689,11 +726,9 @@ export const GameplayScreen = () => {
       <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden">
         <img 
           src={cricketBg} 
-          onError={(e) => {
-            (e.target as HTMLImageElement).src = backupBg;
-          }}
-          alt="Cricket Stadium Pitch visual" 
-          className="w-full h-full object-cover scale-105 filter brightness-95"
+          alt={`${selectedVenue.name} batting view`}
+          fetchPriority="high"
+          className="w-full h-full object-cover object-center scale-[1.03] filter brightness-95"
         />
         
         {/* Dynamic Volumetric Stadium Floodlights */}
@@ -713,6 +748,17 @@ export const GameplayScreen = () => {
 
         <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-transparent to-black/35" />
       </div>
+
+      <motion.button
+        whileHover={{ scale: 1.03, x: -2 }}
+        whileTap={{ scale: 0.96 }}
+        onClick={exitToDashboard}
+        className="pointer-events-auto absolute left-3 top-3 z-50 inline-flex items-center gap-2 rounded-2xl border border-cyan-200/15 bg-neutral-950/48 px-3 py-2 text-[10px] font-black uppercase italic tracking-[0.2em] text-cyan-100/80 shadow-[0_10px_28px_rgba(0,0,0,0.28)] backdrop-blur-md transition-colors hover:border-cyan-200/35 hover:bg-cyan-300/10 hover:text-cyan-50 sm:left-4 sm:top-4"
+        aria-label="Exit match and return to dashboard"
+      >
+        <Home size={15} />
+        <span className="hidden sm:inline">Exit</span>
+      </motion.button>
 
       <div className="absolute top-3 left-1/2 -translate-x-1/2 w-[calc(100%-1rem)] max-w-5xl z-40 pointer-events-none px-2">
         <div className="mx-auto flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-neutral-950/45 px-3 py-2 shadow-[0_10px_32px_rgba(0,0,0,0.28)] backdrop-blur-md md:px-4">
@@ -1076,10 +1122,10 @@ export const GameplayScreen = () => {
         </AnimatePresence>
       </div>
 
-      <div className="absolute inset-x-0 bottom-4 px-4 z-20 pointer-events-none">
-        <div className="mx-auto max-w-5xl rounded-2xl border border-cyan-200/15 bg-neutral-950/76 backdrop-blur-md shadow-[0_16px_42px_rgba(0,0,0,0.42)] p-3 md:p-4">
-          <div className="grid grid-cols-[5.5rem_1fr] lg:grid-cols-[6rem_1fr_14rem] gap-3 md:gap-4 items-center">
-            <div className="relative aspect-[4/3] overflow-hidden rounded-xl border border-cyan-200/15 bg-black">
+      <div className="absolute inset-x-3 bottom-3 z-20 pointer-events-none lg:inset-x-auto lg:right-4 lg:top-20 lg:bottom-auto lg:w-72">
+        <div className="rounded-2xl border border-cyan-200/15 bg-neutral-950/72 p-3 shadow-[0_16px_42px_rgba(0,0,0,0.38)] backdrop-blur-md md:p-4 lg:bg-neutral-950/62">
+          <div className="grid grid-cols-[5.25rem_1fr] gap-3 lg:flex lg:flex-col lg:gap-3">
+            <div className="relative aspect-[4/3] overflow-hidden rounded-xl border border-cyan-200/15 bg-black lg:aspect-video">
               <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover scale-x-[-1] opacity-80" />
               <canvas ref={hiddenCanvasRef} className="hidden" width={32} height={24} />
               <div className="absolute inset-0 rounded-xl border border-cyan-200/20 shadow-[inset_0_0_22px_rgba(103,232,249,0.08)]" />
@@ -1095,17 +1141,17 @@ export const GameplayScreen = () => {
             </div>
 
             <div className="min-w-0">
-              <div className="flex items-center justify-between gap-3">
+              <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="text-[8px] font-black uppercase tracking-[0.28em] text-cyan-100/45 italic">Motion Control</p>
-                  <p className={`text-xl md:text-2xl font-black uppercase italic tracking-tight ${motionStatusColor}`}>
+                  <p className={`text-lg font-black uppercase italic tracking-tight md:text-xl ${motionStatusColor}`}>
                     {motionStatus}
                   </p>
                   <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-white/45">
                     CV bridge: {cvFeedbackState}
                   </p>
                 </div>
-                <div className="hidden sm:block text-right">
+                <div className="hidden text-right lg:block">
                   <p className="text-[8px] font-black uppercase tracking-[0.25em] text-white/35 italic">Delivery</p>
                   <p className="text-sm font-black uppercase text-white">{selectedDelivery}{selectedDelivery === 'SPIN' ? ` / ${spinType}` : ''}</p>
                 </div>
@@ -1122,7 +1168,7 @@ export const GameplayScreen = () => {
                   Stance {stanceConfidence}%
                 </span>
               </div>
-              <div className="mt-3 grid grid-cols-2 gap-2 md:grid-cols-4">
+              <div className="mt-3 grid grid-cols-2 gap-2">
                 {cvSignalItems.map((item) => (
                   <div
                     key={item.label}
@@ -1144,7 +1190,7 @@ export const GameplayScreen = () => {
               </div>
             </div>
 
-            <div className="col-span-2 lg:col-span-1 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2.5">
+            <div className="col-span-2 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2.5 lg:col-span-1">
               <div className="mb-2 flex items-center justify-between gap-2">
                 <p className="text-[8px] font-black uppercase tracking-[0.25em] text-white/35 italic">Shot Feedback</p>
                 <span className="rounded-full border border-cyan-200/15 bg-cyan-300/10 px-2 py-0.5 text-[7px] font-black uppercase tracking-widest text-cyan-100/80">

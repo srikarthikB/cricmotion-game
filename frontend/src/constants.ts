@@ -1,3 +1,8 @@
+import dharamshalaGameplay from './assets/images/stadiums/dharamshala-gameplay.png';
+import lordsGameplay from './assets/images/stadiums/lords-gameplay.png';
+import mcgGameplay from './assets/images/stadiums/mcg-gameplay.png';
+import oldTraffordGameplay from './assets/images/stadiums/old-trafford-gameplay.png';
+
 export const APP_CONFIG = {
   NAME: 'CRICMOTION AI',
   VERSION: '4.1.2-STABLE',
@@ -33,27 +38,34 @@ export const TEAMS = [
 
 export const VENUES = [
   { 
-    id: 'LDN_OVAL', 
-    name: 'LONDON OVAL', 
-    img: 'https://images.unsplash.com/photo-1531415074968-036ba1b575da?auto=format&fit=crop&q=80&w=400',
-    desc: 'Classic turf, high bounce.'
+    id: 'LORDS', 
+    name: "LORD'S", 
+    img: lordsGameplay,
+    gameplayBg: lordsGameplay,
+    desc: 'Historic slope, balanced carry.'
   },
   { 
-    id: 'MEL_GND', 
-    name: 'MELBOURNE ARENA', 
-    img: 'https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?auto=format&fit=crop&q=80&w=400',
-    desc: 'Fast outfield, seaside breeze.'
+    id: 'MCG', 
+    name: 'MCG', 
+    img: mcgGameplay,
+    gameplayBg: mcgGameplay,
+    desc: 'Big boundaries, stadium cauldron.'
   },
   {
-    id: 'DXB_STAD',
-    name: 'DUBAI NEXUS',
-    img: 'https://images.unsplash.com/photo-1593341646782-e0b495cff86d?auto=format&fit=crop&q=80&w=1200',
-    desc: 'Futuristic dome, zero wind.'
+    id: 'DHARAMSHALA',
+    name: 'DHARAMSHALA',
+    img: dharamshalaGameplay,
+    gameplayBg: dharamshalaGameplay,
+    desc: 'Mountain backdrop, crisp carry.'
   },
   {
-    id: 'CAPE_TOWN',
-    name: 'CAPE TOWN HEIGHTS',
-    img: 'https://images.unsplash.com/photo-1624526267942-ab0ff8a3e972?auto=format&fit=crop&q=80&w=1200',
-    desc: 'Scenic view, swing paradise.'
+    id: 'OLD_TRAFFORD',
+    name: 'OLD TRAFFORD',
+    img: oldTraffordGameplay,
+    gameplayBg: oldTraffordGameplay,
+    desc: 'Cloud cover, classic seam feel.'
   }
 ];
+
+export const getVenueById = (venueId: string) =>
+  VENUES.find((venue) => venue.id === venueId) ?? VENUES[0];

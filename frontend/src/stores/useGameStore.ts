@@ -42,8 +42,8 @@ const initialMatchConfig: MatchConfig = {
   wickets: 10,
   isRunChase: false,
   difficulty: 'MEDIUM',
-  venue: 'STADIUM_A',
-  team: 'INDIA',
+  venue: 'LORDS',
+  team: 'IND',
 };
 
 export const useGameStore = create<GameStore>((set) => ({
