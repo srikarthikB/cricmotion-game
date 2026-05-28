@@ -22,6 +22,7 @@ import time
 from collections import deque
 from tracking.trajectory_tracker import TrajectoryTracker
 from detectors.gesture_detector import MotionAnalyzer
+from detectors.swing_sector_classifier import SwingSectorClassifier
 
 # ─────────────────────────────────────────────
 # CONFIGURATION
@@ -102,6 +103,7 @@ class WristTracker:
            "smoothed_velocity": 0.0,
            "direction": "None",
            "angle": 0.0,
+           "sector": "NONE",
            "swing_detected": False,
            "in_cooldown": self.cooldown > 0,
 }
@@ -130,6 +132,7 @@ class WristTracker:
                 magnitude,
                 CONFIG["direction_magnitude_threshold"],
             )
+            sector = SwingSectorClassifier.classify(angle, magnitude)
                 
             
             motion_data.update({
@@ -139,6 +142,7 @@ class WristTracker:
                 "smoothed_velocity": smoothed_velocity,
                 "direction": direction,
                 "angle": angle,
+                "sector": sector,
             })
 
             # ── Swing detection with cooldown ──────────────────────────
@@ -210,7 +214,7 @@ class DebugOverlay:
 
         # ── Semi-transparent HUD background ──────────────────────────
         overlay = frame.copy()
-        cv2.rectangle(overlay, (5, 5), (400, 230), (0, 0, 0), -1)
+        cv2.rectangle(overlay, (5, 5), (470, 250), (0, 0, 0), -1)
         cv2.addWeighted(overlay, 0.4, frame, 0.6, 0, frame)
 
         def put(text, y, color=DebugOverlay.COLOR_WHITE, scale=0.62, thickness=1):
@@ -239,6 +243,10 @@ class DebugOverlay:
             color=DebugOverlay.COLOR_GREEN)
         put(f"L Vel   : {lv:5.1f} px/f  Dir: {left_data['direction']} Ang:{left_data['angle']:.1f}", 130,
             color=DebugOverlay.COLOR_CYAN)
+        put(f"R Sector: {right_data['sector']}", 160,
+            color=DebugOverlay.COLOR_GREEN, scale=0.55)
+        put(f"L Sector: {left_data['sector']}", 185,
+            color=DebugOverlay.COLOR_CYAN, scale=0.55)
 
         # Swing detection state
         r_swing = right_data["swing_detected"]
@@ -253,13 +261,13 @@ class DebugOverlay:
         swing_color = DebugOverlay.COLOR_RED if (r_swing or l_swing) \
                       else DebugOverlay.COLOR_ORANGE if (r_cd or l_cd) \
                       else DebugOverlay.COLOR_WHITE
-        put(swing_text, 170, color=swing_color, scale=0.68, thickness=2)
+        put(swing_text, 215, color=swing_color, scale=0.68, thickness=2)
 
         # FPS
         fps_color = DebugOverlay.COLOR_GREEN if fps >= 25 \
                     else DebugOverlay.COLOR_YELLOW if fps >= 15 \
                     else DebugOverlay.COLOR_RED
-        put(f"FPS     : {fps:5.1f}", 210, color=fps_color)
+        put(f"FPS     : {fps:5.1f}", 240, color=fps_color)
 
     @staticmethod
     def draw_swing_banner(frame, direction: str, wrist_label: str):
@@ -348,6 +356,7 @@ def main():
              "smoothed_velocity": 0.0,
              "direction": "None",
              "angle": 0.0,
+             "sector": "NONE",
              "swing_detected": False,
              "in_cooldown": False
         }
