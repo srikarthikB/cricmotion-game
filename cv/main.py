@@ -20,6 +20,8 @@ import mediapipe as mp
 import math
 import time
 from collections import deque
+from tracking.trajectory_tracker import TrajectoryTracker
+from detectors.gesture_detector import MotionAnalyzer
 
 # ─────────────────────────────────────────────
 # CONFIGURATION
@@ -94,18 +96,24 @@ class WristTracker:
         Returns a motion_data dict consumed by MotionAnalyzer and the HUD.
         """
         motion_data = {
-            "dx": 0, "dy": 0,
-            "magnitude": 0.0,
-            "smoothed_velocity": 0.0,
-            "direction": "None",
-            "swing_detected": False,
-            "in_cooldown": self.cooldown > 0,
-        }
+           "dx": 0,
+           "dy": 0,
+           "magnitude": 0.0,
+           "smoothed_velocity": 0.0,
+           "direction": "None",
+           "angle": 0.0,
+           "swing_detected": False,
+           "in_cooldown": self.cooldown > 0,
+}
 
         if self.prev_pos is not None:
             dx = current_pos[0] - self.prev_pos[0]
             dy = current_pos[1] - self.prev_pos[1]
             magnitude = math.hypot(dx, dy)          # Euclidean distance
+            angle = math.degrees(math.atan2(dy, dx))
+
+            if angle < 0:
+                angle += 360
 
             # Append raw speed to rolling window
             self.velocity_history.append(magnitude)
@@ -116,14 +124,21 @@ class WristTracker:
             )
 
             # Determine cardinal swing direction
-            direction = MotionAnalyzer.get_direction(dx, dy, magnitude)
-
+            direction = MotionAnalyzer.get_direction(
+                dx,
+                dy,
+                magnitude,
+                CONFIG["direction_magnitude_threshold"],
+            )
+                
+            
             motion_data.update({
                 "dx": dx,
                 "dy": dy,
                 "magnitude": magnitude,
                 "smoothed_velocity": smoothed_velocity,
                 "direction": direction,
+                "angle": angle,
             })
 
             # ── Swing detection with cooldown ──────────────────────────
@@ -137,58 +152,6 @@ class WristTracker:
 
         self.prev_pos = current_pos
         return motion_data
-
-
-# ─────────────────────────────────────────────
-# MOTION ANALYZER
-# Pure stateless functions — no instance needed.
-# Easy to unit-test in isolation.
-# ─────────────────────────────────────────────
-class MotionAnalyzer:
-    """
-    Stateless helper methods for motion math.
-    All methods are @staticmethod — no instance needed.
-    """
-
-    @staticmethod
-    def get_direction(dx: int, dy: int, magnitude: float) -> str:
-        """
-        Map a displacement vector to a human-readable cardinal direction.
-
-        Coordinate system (screen space):
-          +X → right    −X → left
-          +Y → down     −Y → up   (screen Y is inverted vs. math Y)
-
-        We pick the dominant axis (whichever |component| is larger)
-        to avoid diagonal labels. Diagonal support is a future extension.
-
-        Returns "None" if the movement is below the noise threshold.
-        """
-        if magnitude < CONFIG["direction_magnitude_threshold"]:
-            return "None"
-
-        # Dominant axis determines the label
-        if abs(dx) >= abs(dy):
-            return "Right →" if dx > 0 else "Left ←"
-        else:
-            # Screen Y increases downward, so negative dy = moving up
-            return "Down ↓" if dy > 0 else "Up ↑"
-
-    @staticmethod
-    def extract_wrist_px(
-        landmarks, landmark_enum, frame_w: int, frame_h: int
-    ) -> tuple[int, int] | None:
-        """
-        Convert a normalized MediaPipe landmark to pixel coordinates.
-        Returns None if visibility is low (landmark occluded / off-screen).
-        """
-        lm = landmarks.landmark[landmark_enum]
-
-        # Skip landmarks MediaPipe is uncertain about
-        if lm.visibility < 0.4:
-            return None
-
-        return (int(lm.x * frame_w), int(lm.y * frame_h))
 
 
 # ─────────────────────────────────────────────
@@ -272,9 +235,9 @@ class DebugOverlay:
         # Velocity + direction
         rv = right_data["smoothed_velocity"]
         lv = left_data["smoothed_velocity"]
-        put(f"R Vel   : {rv:5.1f} px/f  Dir: {right_data['direction']}", 100,
+        put(f"R Vel   : {rv:5.1f} px/f  Dir: {right_data['direction']} Ang: {right_data['angle']:.1f}", 100,
             color=DebugOverlay.COLOR_GREEN)
-        put(f"L Vel   : {lv:5.1f} px/f  Dir: {left_data['direction']}", 130,
+        put(f"L Vel   : {lv:5.1f} px/f  Dir: {left_data['direction']} Ang:{left_data['angle']:.1f}", 130,
             color=DebugOverlay.COLOR_CYAN)
 
         # Swing detection state
@@ -355,6 +318,10 @@ def main():
     right_tracker = WristTracker("Right", color=(80, 80, 255))   # blue-ish
     left_tracker  = WristTracker("Left",  color=(80, 200, 80))   # green-ish
 
+    right_trail = TrajectoryTracker(max_length=25)
+    left_trail  = TrajectoryTracker(max_length=25)
+
+
     fps_tracker = FPSTracker()
 
     print("[INFO] Cricket Motion Tracker started. Press 'q' to quit.")
@@ -376,10 +343,15 @@ def main():
 
         # Defaults when no landmarks detected
         right_pos, left_pos = None, None
-        right_data = {"smoothed_velocity": 0.0, "direction": "None",
-                      "swing_detected": False, "in_cooldown": False}
-        left_data  = dict(right_data)
 
+        right_data = {
+             "smoothed_velocity": 0.0,
+             "direction": "None",
+             "angle": 0.0,
+             "swing_detected": False,
+             "in_cooldown": False
+        }
+        left_data=dict(right_data)
         if results.pose_landmarks:
             # Draw pose skeleton
             mp_draw.draw_landmarks(
@@ -390,6 +362,9 @@ def main():
                 mp_draw.DrawingSpec(color=(100, 100, 255), thickness=2),
             )
 
+            right_trail.draw(frame, color=(0, 255, 255))
+            left_trail.draw(frame, color=(255, 255, 0))
+
             lms = results.pose_landmarks
 
             # ── Extract wrist positions ───────────────────────────────
@@ -399,6 +374,12 @@ def main():
             left_pos = MotionAnalyzer.extract_wrist_px(
                 lms, mp_pose.PoseLandmark.LEFT_WRIST, w, h
             )
+
+            if right_pos:
+             right_trail.add_point(right_pos)
+
+            if left_pos:
+              left_trail.add_point(left_pos)
 
             # ── Update trackers ───────────────────────────────────────
             if right_pos:
