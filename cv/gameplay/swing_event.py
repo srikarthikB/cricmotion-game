@@ -14,6 +14,8 @@ class SwingEvent:
         position: tuple[int, int],
         timestamp: float,
     ) -> dict:
+        swing_window = motion_data.get("swing_window") or {}
+
         return {
             "wrist": wrist,
             "sector": motion_data["sector"],
@@ -24,5 +26,12 @@ class SwingEvent:
             "magnitude": motion_data["magnitude"],
             "position": position,
             "timestamp": timestamp,
+            "start_position": swing_window.get("start_position", position),
+            "end_position": swing_window.get("end_position", position),
+            "peak_velocity": swing_window.get(
+                "peak_velocity",
+                motion_data["smoothed_velocity"],
+            ),
+            "duration_frames": swing_window.get("duration_frames", 1),
             "shot_type": "UNKNOWN",
         }

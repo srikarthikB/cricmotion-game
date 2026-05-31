@@ -26,6 +26,8 @@ from detectors.swing_sector_classifier import SwingSectorClassifier
 from detectors.batting_zone_classifier import BattingZoneClassifier
 from detectors.shot_classifier import ShotClassifier
 from gameplay.swing_event import SwingEvent
+from gameplay.virtual_bat import VirtualBat
+from gameplay.ball import Ball
 
 # ─────────────────────────────────────────────
 # CONFIGURATION
@@ -93,6 +95,64 @@ class WristTracker:
         )
         self.cooldown: int = 0                      # counts down each frame
         self.last_swing_dir: str = "None"
+        self.swing_window_active: bool = False
+        self.swing_start_position: tuple[int, int] | None = None
+        self.swing_end_position: tuple[int, int] | None = None
+        self.swing_peak_velocity: float = 0.0
+        self.swing_duration_frames: int = 0
+
+    def _start_swing_window(
+        self,
+        start_pos: tuple[int, int],
+        current_pos: tuple[int, int],
+        velocity: float,
+    ):
+        self.swing_window_active = True
+        self.swing_start_position = start_pos
+        self.swing_end_position = current_pos
+        self.swing_peak_velocity = velocity
+        self.swing_duration_frames = 1
+
+    def _update_swing_window(
+        self,
+        previous_pos: tuple[int, int],
+        current_pos: tuple[int, int],
+        velocity: float,
+        can_start: bool,
+    ) -> dict | None:
+        swing_threshold = CONFIG["swing_velocity_threshold"]
+
+        if velocity > swing_threshold:
+            if not self.swing_window_active:
+                if can_start:
+                    self._start_swing_window(previous_pos, current_pos, velocity)
+            else:
+                self.swing_end_position = current_pos
+                self.swing_peak_velocity = max(self.swing_peak_velocity, velocity)
+                self.swing_duration_frames += 1
+            return None
+
+        if not self.swing_window_active:
+            return None
+
+        self.swing_end_position = current_pos
+        self.swing_peak_velocity = max(self.swing_peak_velocity, velocity)
+        self.swing_duration_frames += 1
+
+        completed_window = {
+            "start_position": self.swing_start_position,
+            "end_position": self.swing_end_position,
+            "peak_velocity": self.swing_peak_velocity,
+            "duration_frames": self.swing_duration_frames,
+        }
+
+        self.swing_window_active = False
+        self.swing_start_position = None
+        self.swing_end_position = None
+        self.swing_peak_velocity = 0.0
+        self.swing_duration_frames = 0
+
+        return completed_window
 
     def update(self, current_pos: tuple[int, int]) -> dict:
         """
@@ -109,6 +169,8 @@ class WristTracker:
            "sector": "NONE",
            "zone": "UNKNOWN",
            "swing_detected": False,
+           "swing_window_completed": False,
+           "swing_window": None,
            "in_cooldown": self.cooldown > 0,
 }
 
@@ -148,6 +210,16 @@ class WristTracker:
                 "angle": angle,
                 "sector": sector,
             })
+
+            completed_window = self._update_swing_window(
+                self.prev_pos,
+                current_pos,
+                smoothed_velocity,
+                self.cooldown <= 0,
+            )
+            if completed_window:
+                motion_data["swing_window_completed"] = True
+                motion_data["swing_window"] = completed_window
 
             # ── Swing detection with cooldown ──────────────────────────
             if self.cooldown > 0:
@@ -197,12 +269,36 @@ class DebugOverlay:
         )
 
     @staticmethod
+    def draw_virtual_bat(frame, bat_data: dict | None, color: tuple, label: str):
+        if not bat_data:
+            return
+
+        bat_start = bat_data["bat_start"]
+        bat_end = bat_data["bat_end"]
+
+        cv2.line(frame, bat_start, bat_end, color, 8, cv2.LINE_AA)
+        cv2.circle(frame, bat_start, 8, color, -1)
+        cv2.circle(frame, bat_end, 10, (255, 255, 255), 2)
+        cv2.putText(
+            frame,
+            label,
+            (bat_end[0] + 12, bat_end[1] - 10),
+            DebugOverlay.FONT,
+            0.5,
+            color,
+            1,
+            cv2.LINE_AA,
+        )
+
+    @staticmethod
     def draw_hud(
         frame,
         right_pos, right_data: dict,
         left_pos,  left_data: dict,
         fps: float,
         latest_swing_event: dict | None = None,
+        right_bat: dict | None = None,
+        left_bat: dict | None = None,
     ):
         """
         Draw the full debug HUD panel in the top-left corner.
@@ -225,7 +321,7 @@ class DebugOverlay:
 
         # ── Semi-transparent HUD background ──────────────────────────
         overlay = frame.copy()
-        cv2.rectangle(overlay, (5, 5), (560, 400), (0, 0, 0), -1)
+        cv2.rectangle(overlay, (5, 5), (600, 450), (0, 0, 0), -1)
         cv2.addWeighted(overlay, 0.4, frame, 0.6, 0, frame)
 
         def put(text, y, color=DebugOverlay.COLOR_WHITE, scale=0.62, thickness=1):
@@ -263,6 +359,26 @@ class DebugOverlay:
         put(f"L Zone  : {left_data['zone']}", 235,
             color=DebugOverlay.COLOR_CYAN, scale=0.55)
 
+        if right_bat:
+            put(
+                f"R Bat   : {right_bat['bat_angle']:5.1f} deg  Len:{right_bat['bat_length']:5.1f}",
+                270,
+                color=DebugOverlay.COLOR_GREEN,
+                scale=0.5,
+            )
+        else:
+            put("R Bat   : not visible", 270, color=(120, 120, 120), scale=0.5)
+
+        if left_bat:
+            put(
+                f"L Bat   : {left_bat['bat_angle']:5.1f} deg  Len:{left_bat['bat_length']:5.1f}",
+                295,
+                color=DebugOverlay.COLOR_CYAN,
+                scale=0.5,
+            )
+        else:
+            put("L Bat   : not visible", 295, color=(120, 120, 120), scale=0.5)
+
         # Swing detection state
         r_swing = right_data["swing_detected"]
         l_swing = left_data["swing_detected"]
@@ -276,7 +392,7 @@ class DebugOverlay:
         swing_color = DebugOverlay.COLOR_RED if (r_swing or l_swing) \
                       else DebugOverlay.COLOR_ORANGE if (r_cd or l_cd) \
                       else DebugOverlay.COLOR_WHITE
-        put(swing_text, 270, color=swing_color, scale=0.68, thickness=2)
+        put(swing_text, 320, color=swing_color, scale=0.68, thickness=2)
 
         if latest_swing_event:
             put(
@@ -284,33 +400,34 @@ class DebugOverlay:
                 f"{latest_swing_event['wrist']} "
                 f"{latest_swing_event['sector']} "
                 f"{latest_swing_event['zone']}",
-                305,
+                355,
                 color=DebugOverlay.COLOR_WHITE,
                 scale=0.5,
             )
             put(
                 "          "
                 f"Vel:{latest_swing_event['velocity']:.1f} "
-                f"Ang:{latest_swing_event['angle']:.1f}",
-                330,
+                f"Peak:{latest_swing_event['peak_velocity']:.1f} "
+                f"Dur:{latest_swing_event['duration_frames']}",
+                380,
                 color=DebugOverlay.COLOR_WHITE,
                 scale=0.5,
             )
             put(
                 f"Shot    : {latest_swing_event['shot_type']}",
-                355,
+                405,
                 color=DebugOverlay.COLOR_YELLOW,
                 scale=0.55,
             )
         else:
-            put("Event   : none", 305, color=(120, 120, 120), scale=0.5)
-            put("Shot    : UNKNOWN", 355, color=(120, 120, 120), scale=0.55)
+            put("Event   : none", 355, color=(120, 120, 120), scale=0.5)
+            put("Shot    : UNKNOWN", 405, color=(120, 120, 120), scale=0.55)
 
         # FPS
         fps_color = DebugOverlay.COLOR_GREEN if fps >= 25 \
                     else DebugOverlay.COLOR_YELLOW if fps >= 15 \
                     else DebugOverlay.COLOR_RED
-        put(f"FPS     : {fps:5.1f}", 390, color=fps_color)
+        put(f"FPS     : {fps:5.1f}", 440, color=fps_color)
 
     @staticmethod
     def draw_swing_banner(frame, direction: str, wrist_label: str):
@@ -371,6 +488,7 @@ def main():
 
     right_trail = TrajectoryTracker(max_length=25)
     left_trail  = TrajectoryTracker(max_length=25)
+    ball = Ball()
 
 
     fps_tracker = FPSTracker()
@@ -388,6 +506,7 @@ def main():
         frame = cv2.flip(frame, 1)
 
         h, w, _ = frame.shape
+        ball.update(w, h)
 
         # ── Pose inference ────────────────────────────────────────────
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -395,6 +514,7 @@ def main():
 
         # Defaults when no landmarks detected
         right_pos, left_pos = None, None
+        right_bat, left_bat = None, None
 
         right_data = {
              "smoothed_velocity": 0.0,
@@ -403,6 +523,8 @@ def main():
              "sector": "NONE",
              "zone": "UNKNOWN",
              "swing_detected": False,
+             "swing_window_completed": False,
+             "swing_window": None,
              "in_cooldown": False
         }
         left_data=dict(right_data)
@@ -427,6 +549,28 @@ def main():
             )
             left_pos = MotionAnalyzer.extract_wrist_px(
                 lms, mp_pose.PoseLandmark.LEFT_WRIST, w, h
+            )
+
+            right_bat = VirtualBat.from_pose_landmarks(
+                lms,
+                mp_pose.PoseLandmark.RIGHT_ELBOW,
+                mp_pose.PoseLandmark.RIGHT_WRIST,
+                w,
+                h,
+            )
+            left_bat = VirtualBat.from_pose_landmarks(
+                lms,
+                mp_pose.PoseLandmark.LEFT_ELBOW,
+                mp_pose.PoseLandmark.LEFT_WRIST,
+                w,
+                h,
+            )
+
+            DebugOverlay.draw_virtual_bat(
+                frame, right_bat, color=(0, 80, 255), label="R Bat"
+            )
+            DebugOverlay.draw_virtual_bat(
+                frame, left_bat, color=(255, 180, 0), label="L Bat"
             )
 
             if right_pos:
@@ -454,6 +598,27 @@ def main():
                 DebugOverlay.draw_wrist_marker(
                     frame, left_pos, left_tracker.color,
                     f"L ({left_pos[0]},{left_pos[1]})"
+                )
+
+            if (
+                right_data["swing_window_completed"]
+                and latest_swing_event
+                and latest_swing_event["wrist"] == "Right"
+            ):
+                latest_swing_event.update(right_data["swing_window"])
+                latest_swing_event["position"] = latest_swing_event["end_position"]
+                latest_swing_event["shot_type"] = ShotClassifier.classify(
+                    latest_swing_event
+                )
+            elif (
+                left_data["swing_window_completed"]
+                and latest_swing_event
+                and latest_swing_event["wrist"] == "Left"
+            ):
+                latest_swing_event.update(left_data["swing_window"])
+                latest_swing_event["position"] = latest_swing_event["end_position"]
+                latest_swing_event["shot_type"] = ShotClassifier.classify(
+                    latest_swing_event
                 )
 
             # ── Swing banners (centre-screen) ─────────────────────────
@@ -486,12 +651,15 @@ def main():
 
         # ── HUD overlay (always drawn, even with no skeleton) ─────────
         fps = fps_tracker.tick()
+        ball.draw(frame)
         DebugOverlay.draw_hud(
             frame,
             right_pos, right_data,
             left_pos,  left_data,
             fps,
             latest_swing_event,
+            right_bat,
+            left_bat,
         )
 
         cv2.imshow("Cricket Motion Tracker — Phase 1/2", frame)

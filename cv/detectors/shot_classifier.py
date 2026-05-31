@@ -41,9 +41,16 @@ class ShotClassifier:
 
         sector = swing_event.get("sector", "UNKNOWN")
         zone = swing_event.get("zone", "UNKNOWN")
-        velocity = swing_event.get("velocity", 0.0)
+        velocity = max(
+            swing_event.get("velocity", 0.0),
+            swing_event.get("peak_velocity", 0.0),
+        )
+        duration_frames = swing_event.get("duration_frames", 1)
 
         if sector in {"NONE", "UNKNOWN"} or zone == "UNKNOWN":
+            return "UNKNOWN"
+
+        if duration_frames <= 1 and velocity < ShotClassifier.LOFTED_MIN_VELOCITY:
             return "UNKNOWN"
 
         if velocity <= ShotClassifier.DEFENSIVE_MAX_VELOCITY:
