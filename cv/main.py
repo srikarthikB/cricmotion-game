@@ -24,6 +24,7 @@ from tracking.trajectory_tracker import TrajectoryTracker
 from detectors.gesture_detector import MotionAnalyzer
 from detectors.swing_sector_classifier import SwingSectorClassifier
 from detectors.batting_zone_classifier import BattingZoneClassifier
+from detectors.shot_classifier import ShotClassifier
 from gameplay.swing_event import SwingEvent
 
 # ─────────────────────────────────────────────
@@ -216,13 +217,15 @@ class DebugOverlay:
           210 — Right batting zone
           235 — Left batting zone
           270 — Swing state / cooldown
-          300 — FPS
+          305 — Latest swing event
+          355 — Shot family
+          390 — FPS
         """
         h, w = frame.shape[:2]
 
         # ── Semi-transparent HUD background ──────────────────────────
         overlay = frame.copy()
-        cv2.rectangle(overlay, (5, 5), (560, 370), (0, 0, 0), -1)
+        cv2.rectangle(overlay, (5, 5), (560, 400), (0, 0, 0), -1)
         cv2.addWeighted(overlay, 0.4, frame, 0.6, 0, frame)
 
         def put(text, y, color=DebugOverlay.COLOR_WHITE, scale=0.62, thickness=1):
@@ -293,14 +296,21 @@ class DebugOverlay:
                 color=DebugOverlay.COLOR_WHITE,
                 scale=0.5,
             )
+            put(
+                f"Shot    : {latest_swing_event['shot_type']}",
+                355,
+                color=DebugOverlay.COLOR_YELLOW,
+                scale=0.55,
+            )
         else:
             put("Event   : none", 305, color=(120, 120, 120), scale=0.5)
+            put("Shot    : UNKNOWN", 355, color=(120, 120, 120), scale=0.55)
 
         # FPS
         fps_color = DebugOverlay.COLOR_GREEN if fps >= 25 \
                     else DebugOverlay.COLOR_YELLOW if fps >= 15 \
                     else DebugOverlay.COLOR_RED
-        put(f"FPS     : {fps:5.1f}", 360, color=fps_color)
+        put(f"FPS     : {fps:5.1f}", 390, color=fps_color)
 
     @staticmethod
     def draw_swing_banner(frame, direction: str, wrist_label: str):
@@ -454,6 +464,9 @@ def main():
                     right_pos,
                     time.monotonic(),
                 )
+                latest_swing_event["shot_type"] = ShotClassifier.classify(
+                    latest_swing_event
+                )
                 DebugOverlay.draw_swing_banner(
                     frame, right_data["direction"], "Right"
                 )
@@ -463,6 +476,9 @@ def main():
                     left_data,
                     left_pos,
                     time.monotonic(),
+                )
+                latest_swing_event["shot_type"] = ShotClassifier.classify(
+                    latest_swing_event
                 )
                 DebugOverlay.draw_swing_banner(
                     frame, left_data["direction"], "Left"

@@ -24,4 +24,5 @@ class SwingEvent:
             "magnitude": motion_data["magnitude"],
             "position": position,
             "timestamp": timestamp,
+            "shot_type": "UNKNOWN",
         }
