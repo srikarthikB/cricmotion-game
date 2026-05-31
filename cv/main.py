@@ -28,6 +28,7 @@ from detectors.shot_classifier import ShotClassifier
 from gameplay.swing_event import SwingEvent
 from gameplay.virtual_bat import VirtualBat
 from gameplay.ball import Ball
+from utils.fps_tracker import FPSTracker
 
 # ─────────────────────────────────────────────
 # CONFIGURATION
@@ -446,24 +447,6 @@ class DebugOverlay:
                     DebugOverlay.FONT, 1.1, (0, 0, 0), 4, cv2.LINE_AA)
         cv2.putText(frame, text, (tx, ty),
                     DebugOverlay.FONT, 1.1, (0, 0, 255), 3, cv2.LINE_AA)
-
-
-# ─────────────────────────────────────────────
-# FPS TRACKER
-# Simple token-bucket FPS estimator.
-# Uses wall-clock time, not frame count.
-# ─────────────────────────────────────────────
-class FPSTracker:
-    def __init__(self, smoothing: int = 30):
-        self._times: deque[float] = deque(maxlen=smoothing)
-
-    def tick(self) -> float:
-        """Call once per frame. Returns current smoothed FPS."""
-        self._times.append(time.monotonic())
-        if len(self._times) < 2:
-            return 0.0
-        elapsed = self._times[-1] - self._times[0]
-        return (len(self._times) - 1) / elapsed if elapsed > 0 else 0.0
 
 
 # ─────────────────────────────────────────────
