@@ -24,6 +24,7 @@ from tracking.trajectory_tracker import TrajectoryTracker
 from detectors.gesture_detector import MotionAnalyzer
 from detectors.swing_sector_classifier import SwingSectorClassifier
 from detectors.batting_zone_classifier import BattingZoneClassifier
+from gameplay.swing_event import SwingEvent
 
 # ─────────────────────────────────────────────
 # CONFIGURATION
@@ -200,6 +201,7 @@ class DebugOverlay:
         right_pos, right_data: dict,
         left_pos,  left_data: dict,
         fps: float,
+        latest_swing_event: dict | None = None,
     ):
         """
         Draw the full debug HUD panel in the top-left corner.
@@ -220,7 +222,7 @@ class DebugOverlay:
 
         # ── Semi-transparent HUD background ──────────────────────────
         overlay = frame.copy()
-        cv2.rectangle(overlay, (5, 5), (520, 310), (0, 0, 0), -1)
+        cv2.rectangle(overlay, (5, 5), (560, 370), (0, 0, 0), -1)
         cv2.addWeighted(overlay, 0.4, frame, 0.6, 0, frame)
 
         def put(text, y, color=DebugOverlay.COLOR_WHITE, scale=0.62, thickness=1):
@@ -273,11 +275,32 @@ class DebugOverlay:
                       else DebugOverlay.COLOR_WHITE
         put(swing_text, 270, color=swing_color, scale=0.68, thickness=2)
 
+        if latest_swing_event:
+            put(
+                "Event   : "
+                f"{latest_swing_event['wrist']} "
+                f"{latest_swing_event['sector']} "
+                f"{latest_swing_event['zone']}",
+                305,
+                color=DebugOverlay.COLOR_WHITE,
+                scale=0.5,
+            )
+            put(
+                "          "
+                f"Vel:{latest_swing_event['velocity']:.1f} "
+                f"Ang:{latest_swing_event['angle']:.1f}",
+                330,
+                color=DebugOverlay.COLOR_WHITE,
+                scale=0.5,
+            )
+        else:
+            put("Event   : none", 305, color=(120, 120, 120), scale=0.5)
+
         # FPS
         fps_color = DebugOverlay.COLOR_GREEN if fps >= 25 \
                     else DebugOverlay.COLOR_YELLOW if fps >= 15 \
                     else DebugOverlay.COLOR_RED
-        put(f"FPS     : {fps:5.1f}", 300, color=fps_color)
+        put(f"FPS     : {fps:5.1f}", 360, color=fps_color)
 
     @staticmethod
     def draw_swing_banner(frame, direction: str, wrist_label: str):
@@ -341,6 +364,7 @@ def main():
 
 
     fps_tracker = FPSTracker()
+    latest_swing_event = None
 
     print("[INFO] Cricket Motion Tracker started. Press 'q' to quit.")
 
@@ -424,10 +448,22 @@ def main():
 
             # ── Swing banners (centre-screen) ─────────────────────────
             if right_data["swing_detected"]:
+                latest_swing_event = SwingEvent.create(
+                    "Right",
+                    right_data,
+                    right_pos,
+                    time.monotonic(),
+                )
                 DebugOverlay.draw_swing_banner(
                     frame, right_data["direction"], "Right"
                 )
             elif left_data["swing_detected"]:
+                latest_swing_event = SwingEvent.create(
+                    "Left",
+                    left_data,
+                    left_pos,
+                    time.monotonic(),
+                )
                 DebugOverlay.draw_swing_banner(
                     frame, left_data["direction"], "Left"
                 )
@@ -439,6 +475,7 @@ def main():
             right_pos, right_data,
             left_pos,  left_data,
             fps,
+            latest_swing_event,
         )
 
         cv2.imshow("Cricket Motion Tracker — Phase 1/2", frame)
