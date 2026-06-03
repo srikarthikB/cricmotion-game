@@ -60,6 +60,8 @@ class DebugOverlay:
         latest_swing_event: dict | None = None,
         right_bat: dict | None = None,
         left_bat: dict | None = None,
+        collision_state: str = "MISS",
+        collision_debug: dict | None = None,
     ):
         """
         Draw the full debug HUD panel in the top-left corner.
@@ -76,13 +78,18 @@ class DebugOverlay:
           270 - Swing state / cooldown
           305 - Latest swing event
           355 - Shot family
-          390 - FPS
+          430 - Collision state
+          455 - Ball position
+          480 - Nearest bat start
+          505 - Nearest bat end
+          530 - Distance to bat
+          555 - FPS
         """
         h, w = frame.shape[:2]
 
         # Semi-transparent HUD background
         overlay = frame.copy()
-        cv2.rectangle(overlay, (5, 5), (600, 450), (0, 0, 0), -1)
+        cv2.rectangle(overlay, (5, 5), (650, 570), (0, 0, 0), -1)
         cv2.addWeighted(overlay, 0.4, frame, 0.6, 0, frame)
 
         def put(text, y, color=DebugOverlay.COLOR_WHITE, scale=0.62, thickness=1):
@@ -184,11 +191,70 @@ class DebugOverlay:
             put("Event   : none", 355, color=(120, 120, 120), scale=0.5)
             put("Shot    : UNKNOWN", 405, color=(120, 120, 120), scale=0.55)
 
+        collision_color = DebugOverlay.COLOR_RED if collision_state == "HIT" \
+                          else DebugOverlay.COLOR_WHITE
+        put(
+            f"Collision: {collision_state}",
+            430,
+            color=collision_color,
+            scale=0.62,
+            thickness=2 if collision_state == "HIT" else 1,
+        )
+
+        if collision_debug:
+            ball_x, ball_y = collision_debug["ball_position"]
+            bat_start = collision_debug["bat_start"]
+            bat_end = collision_debug["bat_end"]
+            distance = collision_debug["distance_to_bat"]
+            tolerance = collision_debug["hit_tolerance"]
+
+            put(
+                f"Ball    : ({ball_x:5.1f}, {ball_y:5.1f})",
+                455,
+                color=DebugOverlay.COLOR_WHITE,
+                scale=0.48,
+            )
+            put(
+                f"BatStart: {bat_start if bat_start else 'None'}",
+                480,
+                color=DebugOverlay.COLOR_WHITE,
+                scale=0.48,
+            )
+            put(
+                f"BatEnd  : {bat_end if bat_end else 'None'}",
+                505,
+                color=DebugOverlay.COLOR_WHITE,
+                scale=0.48,
+            )
+            distance_text = "None" if distance is None else f"{distance:5.1f}"
+            put(
+                f"BatDist : {distance_text} / Tol:{tolerance:4.1f}",
+                530,
+                color=collision_color,
+                scale=0.48,
+            )
+
         # FPS
         fps_color = DebugOverlay.COLOR_GREEN if fps >= 25 \
                     else DebugOverlay.COLOR_YELLOW if fps >= 15 \
                     else DebugOverlay.COLOR_RED
-        put(f"FPS     : {fps:5.1f}", 440, color=fps_color)
+        put(f"FPS     : {fps:5.1f}", 555, color=fps_color)
+
+    @staticmethod
+    def draw_collision_banner(frame, collision_state: str):
+        if collision_state != "HIT":
+            return
+
+        h, w = frame.shape[:2]
+        text = "BALL HIT!"
+        (tw, th), _ = cv2.getTextSize(text, DebugOverlay.FONT, 1.2, 3)
+        tx = (w - tw) // 2
+        ty = int(h * 0.25)
+
+        cv2.putText(frame, text, (tx + 2, ty + 2),
+                    DebugOverlay.FONT, 1.2, (0, 0, 0), 5, cv2.LINE_AA)
+        cv2.putText(frame, text, (tx, ty),
+                    DebugOverlay.FONT, 1.2, (0, 0, 255), 3, cv2.LINE_AA)
 
     @staticmethod
     def draw_swing_banner(frame, direction: str, wrist_label: str):

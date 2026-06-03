@@ -26,6 +26,7 @@ from detectors.shot_classifier import ShotClassifier
 from gameplay.swing_event import SwingEvent
 from gameplay.virtual_bat import VirtualBat
 from gameplay.ball import Ball
+from gameplay.collision_detector import CollisionDetector
 from utils.fps_tracker import FPSTracker
 from rendering.debug_overlay import DebugOverlay
 
@@ -95,6 +96,8 @@ def main():
 
     fps_tracker = FPSTracker()
     latest_swing_event = None
+    collision_state = "MISS"
+    collision_debug = None
 
     print("[INFO] Cricket Motion Tracker started. Press 'q' to quit.")
 
@@ -109,6 +112,8 @@ def main():
 
         h, w, _ = frame.shape
         ball.update(w, h)
+        collision_state = "MISS"
+        collision_debug = CollisionDetector.debug_data(ball, None, None)
 
         # â”€â”€ Pose inference â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -223,6 +228,17 @@ def main():
                     latest_swing_event
                 )
 
+            collision_state = CollisionDetector.classify(
+                ball,
+                right_bat,
+                left_bat,
+            )
+            collision_debug = CollisionDetector.debug_data(
+                ball,
+                right_bat,
+                left_bat,
+            )
+
             # â”€â”€ Swing banners (centre-screen) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
             if right_data["swing_detected"]:
                 latest_swing_event = SwingEvent.create(
@@ -254,6 +270,7 @@ def main():
         # â”€â”€ HUD overlay (always drawn, even with no skeleton) â”€â”€â”€â”€â”€â”€â”€â”€â”€
         fps = fps_tracker.tick()
         ball.draw(frame)
+        DebugOverlay.draw_collision_banner(frame, collision_state)
         DebugOverlay.draw_hud(
             frame,
             right_pos, right_data,
@@ -262,6 +279,8 @@ def main():
             latest_swing_event,
             right_bat,
             left_bat,
+            collision_state,
+            collision_debug,
         )
 
         cv2.imshow("Cricket Motion Tracker â€” Phase 1/2", frame)
